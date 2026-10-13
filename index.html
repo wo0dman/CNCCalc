@@ -1,0 +1,1470 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════
+  «Калькулятор центра окружности» — одностраничное PWA-приложение
+  в стиле iOS (Human Interface Guidelines). Работает офлайн.
+  Версия 1.2 — улучшено распознавание с экранов (ЧПУ / MCS-блоки):
+  OCR ищет именованные строки «X 38.100» / «Y 160.367» (ось + число),
+  игнорирует значения с единицами «mm» из дополнительных блоков (G56…),
+  перебирает режимы разметки страницы (PSM 6 → 3), показывает
+  распознанный текст для контроля. Ранее исправлено: ReferenceError/TDZ
+  (порядок объявления переменных холста), fallback для старых iOS.
+  ═══════════════════════════════════════════════════════════════════
+
+  📲 КРАТКАЯ ИНСТРУКЦИЯ ПО УСТАНОВКЕ НА СМАРТФОН:
+
+  iPhone / iPad (Safari):
+    1. Откройте страницу с приложением в Safari.
+    2. Нажмите кнопку «Поделиться» (квадрат со стрелкой вверх).
+    3. Выберите «На экран Домой» → «Добавить».
+    4. Запускайте приложение с домашнего экрана — оно откроется
+       в полноэкранном режиме без элементов браузера.
+
+  Android (Chrome):
+    1. Откройте страницу с приложением в Chrome.
+    2. Появится автоматическое предложение «Установить приложение»
+       (или: меню ⋮ → «Установить приложение» / «Добавить на главный экран»).
+    3. Подтвердите установку — ярлык появится на рабочем столе.
+
+  Примечания:
+    • Для установки PWA страница должна раздаваться по HTTPS
+      (или с localhost). При открытии файла с диска (file://)
+      приложение полностью работает, но установка на экран
+      Домой и камера могут быть недоступны — используйте любой
+      локальный сервер, например: npx serve
+    • Манифест и иконки генерируются приложением динамически.
+    • Service Worker: код встроен ниже и регистрируется через
+      Blob-URL (работает не во всех браузерах). Для полноценного
+      офлайн-кэша положите рядом файл sw.js с тем же кодом
+      (он приведён в комментарии внутри скрипта).
+    • OCR (Tesseract.js) загружается с CDN и требует интернет
+      при первом использовании; остальной функционал — офлайн.
+  ═══════════════════════════════════════════════════════════════════
+-->
+<html lang="ru" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Центр окружности</title>
+<meta name="description" content="Калькулятор центра окружности по 3 или 4 точкам">
+
+<!-- PWA-мета для iOS -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Центр окр.">
+<meta name="theme-color" content="#F2F2F7">
+<link rel="apple-touch-icon" id="appleIcon" href="data:,">
+<link rel="manifest" id="manifestLink" href="">
+
+<style>
+/* ═══════════════ ТЕМЫ (CSS-переменные) ═══════════════ */
+:root{
+  --bg:#F2F2F7; --card:#FFFFFF; --text:#111113; --text2:#8A8A8E;
+  --sep:rgba(60,60,67,.14); --accent:#007AFF; --accent-soft:rgba(0,122,255,.12);
+  --input-bg:#F1F1F5; --header-bg:rgba(249,249,251,.82);
+  --seg-bg:rgba(118,118,128,.14); --seg-thumb:#FFFFFF;
+  --canvas-bg:#FFFFFF; --grid:#ECECF1; --grid-strong:#DCDCE3; --axis:#9A9AA0;
+  --point-color:#FF9500; --center-color:#FF3B30; --danger:#FF3B30;
+  --shadow:0 1px 2px rgba(0,0,0,.05), 0 8px 24px rgba(0,0,0,.06);
+}
+[data-theme="dark"]{
+  --bg:#000000; --card:#1C1C1E; --text:#F5F5F7; --text2:#98989F;
+  --sep:rgba(84,84,88,.6); --accent:#0A84FF; --accent-soft:rgba(10,132,255,.18);
+  --input-bg:#2C2C2E; --header-bg:rgba(28,28,30,.78);
+  --seg-bg:rgba(118,118,128,.24); --seg-thumb:#48484A;
+  --canvas-bg:#17171A; --grid:#26262A; --grid-strong:#34343A; --axis:#6C6C70;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+}
+[data-theme="midnight"]{
+  --bg:#0B1026; --card:#151C3E; --text:#E9ECFF; --text2:#8B93C7;
+  --sep:rgba(94,124,226,.22); --accent:#6E8BFF; --accent-soft:rgba(110,139,255,.16);
+  --input-bg:#1D2650; --header-bg:rgba(13,18,44,.8);
+  --seg-bg:rgba(110,139,255,.16); --seg-thumb:#28336B;
+  --canvas-bg:#101736; --grid:#1D2752; --grid-strong:#28356B; --axis:#4A5AA8;
+  --point-color:#FFC94D; --center-color:#FF6B81;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(4,8,30,.5);
+}
+[data-theme="sunset"]{
+  --bg:#FBF0E7; --card:#FFFAF5; --text:#3B2A20; --text2:#A78D7A;
+  --sep:rgba(160,116,84,.2); --accent:#FF7A45; --accent-soft:rgba(255,122,69,.14);
+  --input-bg:#F7E9DC; --header-bg:rgba(251,240,231,.85);
+  --seg-bg:rgba(167,141,122,.18); --seg-thumb:#FFF6EC;
+  --canvas-bg:#FFFCF8; --grid:#F4E4D5; --grid-strong:#EBCFBA; --axis:#C4A184;
+  --point-color:#E85D75; --center-color:#B23A48;
+  --shadow:0 1px 2px rgba(120,80,50,.08), 0 8px 24px rgba(120,80,50,.1);
+}
+@media (prefers-color-scheme: dark){
+  [data-theme="auto"]{
+    --bg:#000000; --card:#1C1C1E; --text:#F5F5F7; --text2:#98989F;
+    --sep:rgba(84,84,88,.6); --accent:#0A84FF; --accent-soft:rgba(10,132,255,.18);
+    --input-bg:#2C2C2E; --header-bg:rgba(28,28,30,.78);
+    --seg-bg:rgba(118,118,128,.24); --seg-thumb:#48484A;
+    --canvas-bg:#17171A; --grid:#26262A; --grid-strong:#34343A; --axis:#6C6C70;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+}
+
+/* ═══════════════ БАЗА ═══════════════ */
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg); color:var(--text);
+  min-height:100vh; overscroll-behavior-y:none;
+  transition:background-color .25s cubic-bezier(.4,0,.2,1), color .25s cubic-bezier(.4,0,.2,1);
+}
+[hidden]{display:none !important}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-inset-bottom));
+  padding-left:calc(16px + env(safe-area-inset-left));padding-right:calc(16px + env(safe-area-inset-right));}
+
+/* ═══════════════ HEADER (blur) ═══════════════ */
+.header{
+  position:sticky;top:0;z-index:50;
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  background:var(--header-bg);
+  border-bottom:.5px solid var(--sep);
+  padding:calc(env(safe-area-inset-top) + 10px) calc(16px + env(safe-area-inset-right)) 10px calc(16px + env(safe-area-inset-left));
+}
+.header-inner{max-width:640px;margin:0 auto;display:flex;align-items:center;gap:10px}
+.header h1{font-size:20px;font-weight:700;margin:0;flex:1;letter-spacing:-.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.icon-btn{
+  width:44px;height:44px;min-width:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+  background:var(--accent-soft);color:var(--accent);
+  transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s cubic-bezier(.4,0,.2,1);
+}
+.icon-btn:active{transform:scale(.92);opacity:.7}
+.icon-btn svg{width:22px;height:22px}
+
+/* ═══════════════ КАРТОЧКИ ═══════════════ */
+.card{
+  background:var(--card);border-radius:18px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow);
+  transition:background-color .25s cubic-bezier(.4,0,.2,1);
+}
+.card-title{font-size:13px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.6px;margin:0 0 10px}
+
+/* ═══════════════ iOS SEGMENTED CONTROL ═══════════════ */
+.segmented{position:relative;display:flex;background:var(--seg-bg);border-radius:12px;padding:2px}
+.segmented .thumb{
+  position:absolute;top:2px;bottom:2px;left:2px;width:calc(50% - 2px);
+  background:var(--seg-thumb);border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.18);
+  transition:transform .25s cubic-bezier(.4,0,.2,1);
+}
+.segmented[data-index="1"] .thumb{transform:translateX(100%)}
+.segmented button{
+  position:relative;z-index:1;flex:1;min-height:40px;font-size:15px;font-weight:600;color:var(--text2);
+  border-radius:10px;transition:color .25s cubic-bezier(.4,0,.2,1);
+}
+.segmented button.active{color:var(--text)}
+
+/* ═══════════════ ТОЧКИ ═══════════════ */
+.point-card{padding:14px 16px}
+.point-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.badge{
+  width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;
+}
+.point-title{font-size:16px;font-weight:600}
+.point-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field-cap{font-size:12px;font-weight:600;color:var(--text2);padding-left:4px}
+.field input{
+  width:100%;height:48px;border:none;border-radius:12px;background:var(--input-bg);color:var(--text);
+  font-size:17px;padding:0 12px;outline:none;font-variant-numeric:tabular-nums;
+  transition:box-shadow .25s cubic-bezier(.4,0,.2,1),background-color .25s cubic-bezier(.4,0,.2,1);
+}
+.field input:focus{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 4.5px var(--accent)}
+.field input.err{box-shadow:0 0 0 2px var(--danger)}
+.field input.flash-ok{box-shadow:0 0 0 3px rgba(52,199,89,.4)}
+.cam-btn{
+  height:48px;min-width:52px;padding:0 12px;border-radius:12px;background:var(--accent-soft);color:var(--accent);
+  display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap;
+  transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s cubic-bezier(.4,0,.2,1);
+}
+.cam-btn:active{transform:scale(.94);opacity:.75}
+.cam-btn .cam-ico{font-size:18px;line-height:1}
+@media (max-width:479px){.cam-btn .cam-label{display:none}.cam-btn{padding:0;width:52px;justify-content:center}}
+
+/* ═══════════════ КНОПКИ ═══════════════ */
+.actions{display:grid;grid-template-columns:1fr;gap:10px;margin:16px 0 14px}
+.actions-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{
+  min-height:50px;border-radius:14px;font-size:17px;font-weight:600;letter-spacing:-.2px;
+  display:flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;
+  transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s cubic-bezier(.4,0,.2,1);
+}
+.btn:active{transform:scale(.97);opacity:.75}
+.btn:disabled{opacity:.4}
+.btn.filled{background:var(--accent);color:#fff;box-shadow:0 4px 14px var(--accent-soft)}
+.btn.tinted{background:var(--accent-soft);color:var(--accent)}
+.btn.plain{background:transparent;color:var(--accent)}
+
+/* ═══════════════ CANVAS ═══════════════ */
+.canvas-card{padding:12px;position:relative;overflow:hidden}
+.canvas-wrap{position:relative;border-radius:12px;overflow:hidden;background:var(--canvas-bg)}
+#plot{display:block;width:100%;height:320px;touch-action:none;cursor:grab}
+#plot.dragging{cursor:grabbing}
+@media (min-width:600px){#plot{height:420px}}
+.fit-btn{
+  position:absolute;right:10px;top:10px;z-index:2;
+  height:36px;padding:0 14px;border-radius:18px;font-size:13px;font-weight:600;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  background:var(--header-bg);color:var(--accent);border:.5px solid var(--sep);
+  box-shadow:0 2px 8px rgba(0,0,0,.12);
+  transition:transform .25s cubic-bezier(.4,0,.2,1);
+}
+.fit-btn:active{transform:scale(.93)}
+.canvas-hint{font-size:12px;color:var(--text2);text-align:center;margin:8px 0 0;line-height:1.4}
+
+/* ═══════════════ РЕЗУЛЬТАТ ═══════════════ */
+#resultCard{animation:pop .3s cubic-bezier(.4,0,.2,1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
+.res-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px}
+.res-cell{background:var(--input-bg);border-radius:14px;padding:12px 14px;text-align:center}
+.res-label{font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.res-value{font-size:20px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums;word-break:break-all}
+.res-eq{margin-top:12px;font-size:14px;color:var(--text2);text-align:center;font-variant-numeric:tabular-nums;word-break:break-all}
+
+/* ═══════════════ НАСТРОЙКИ ТЕМЫ ═══════════════ */
+.setting-row{display:flex;align-items:center;gap:12px;min-height:44px;width:100%;text-align:left}
+.setting-ico{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
+.setting-text{flex:1;min-width:0}
+.setting-title{font-size:16px;font-weight:600;display:block}
+.setting-sub{font-size:13px;color:var(--text2);margin-top:1px;display:block}
+.chevron{color:var(--text2);font-size:18px;opacity:.6}
+
+/* ═══════════════ FOOTER ═══════════════ */
+.footer-note{text-align:center;font-size:12px;color:var(--text2);margin:18px 0 6px;line-height:1.5}
+
+/* ═══════════════ iOS SHEET (модалки) ═══════════════ */
+.sheet-backdrop{
+  position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.4);
+  opacity:0;pointer-events:none;transition:opacity .25s cubic-bezier(.4,0,.2,1);
+  backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);
+}
+.sheet-backdrop.open{opacity:1;pointer-events:auto}
+.sheet{
+  position:absolute;left:0;right:0;bottom:0;max-height:92vh;overflow-y:auto;
+  background:var(--bg);border-radius:20px 20px 0 0;
+  padding:8px 16px calc(20px + env(safe-area-inset-bottom));
+  transform:translateY(105%);
+  transition:transform .35s cubic-bezier(.32,.72,0,1);
+  box-shadow:0 -8px 40px rgba(0,0,0,.25);
+}
+.sheet-backdrop.open .sheet{transform:translateY(0)}
+.grabber{width:36px;height:5px;border-radius:3px;background:var(--text2);opacity:.4;margin:6px auto 12px}
+.sheet h2{font-size:20px;font-weight:700;margin:4px 0 14px;text-align:center;letter-spacing:-.3px}
+.sheet-card{background:var(--card);border-radius:16px;padding:6px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.theme-row{
+  display:flex;align-items:center;gap:12px;width:100%;min-height:52px;text-align:left;
+  border-bottom:.5px solid var(--sep);font-size:17px;
+}
+.theme-row:last-child{border-bottom:none}
+.theme-row .swatch{width:26px;height:26px;border-radius:8px;flex-shrink:0;border:1px solid var(--sep)}
+.theme-row .t-name{flex:1;font-weight:500}
+.theme-row .check{color:var(--accent);font-weight:700;font-size:18px;opacity:0;transition:opacity .2s}
+.theme-row.selected .check{opacity:1}
+.theme-row.selected .t-name{color:var(--accent);font-weight:600}
+.sheet .info-text{font-size:15px;line-height:1.55;color:var(--text);padding:8px 0}
+.sheet .info-text h3{font-size:16px;margin:14px 0 6px}
+.sheet .info-text ol,.sheet .info-text ul{padding-left:20px;margin:6px 0}
+.sheet .info-text li{margin:4px 0}
+
+/* ═══════════════ КАМЕРА / OCR ═══════════════ */
+.cam-stage{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3;margin-bottom:12px}
+.cam-stage video{width:100%;height:100%;object-fit:cover;display:block}
+.cam-reticle{
+  position:absolute;left:8%;right:8%;top:12%;bottom:12%;
+  border:2px solid rgba(255,255,255,.85);border-radius:14px;pointer-events:none;
+  box-shadow:0 0 0 2000px rgba(0,0,0,.28);
+  animation:reticlePulse 2.4s ease-in-out infinite;
+}
+@keyframes reticlePulse{0%,100%{border-color:rgba(255,255,255,.85)}50%{border-color:rgba(10,132,255,.95)}}
+.cam-msg{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:12px;color:#fff;font-size:15px;text-align:center;padding:24px;background:rgba(0,0,0,.72);
+}
+.cam-status{font-size:14px;color:var(--text2);text-align:center;min-height:20px;margin-bottom:10px;line-height:1.4}
+.cam-status.error{color:var(--danger)}
+.cam-actions{display:grid;grid-template-columns:1fr 1.4fr;gap:10px;margin-top:12px}
+.cam-debug{margin:0 0 4px;font-size:13px;color:var(--text2)}
+.cam-debug summary{cursor:pointer;padding:4px 2px;user-select:none}
+.cam-debug pre{
+  margin:6px 0 0;padding:10px;border-radius:10px;background:var(--input-bg);
+  font-size:11px;line-height:1.45;white-space:pre-wrap;word-break:break-word;
+  max-height:140px;overflow:auto;color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Courier New",monospace;
+}
+.spinner{
+  width:34px;height:34px;border-radius:50%;border:3px solid rgba(255,255,255,.25);border-top-color:#fff;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ═══════════════ TOAST ═══════════════ */
+.toast{
+  position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));z-index:200;
+  transform:translate(-50%,20px);opacity:0;pointer-events:none;
+  max-width:min(92vw,480px);
+  background:rgba(30,30,32,.92);color:#fff;font-size:14px;font-weight:500;line-height:1.4;
+  padding:12px 18px;border-radius:16px;text-align:center;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:0 8px 30px rgba(0,0,0,.3);
+  transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s cubic-bezier(.4,0,.2,1);
+}
+.toast.show{transform:translate(-50%,0);opacity:1}
+.toast.error{background:rgba(180,40,32,.94)}
+</style>
+</head>
+<body>
+
+<!-- ═══════════ HEADER ═══════════ -->
+<header class="header">
+  <div class="header-inner">
+    <h1>⊙ Центр окружности</h1>
+    <button class="icon-btn" id="infoBtn" type="button" aria-label="Справка и установка">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor" stroke="none"/></svg>
+    </button>
+    <button class="icon-btn" id="fsBtn" type="button" aria-label="На весь экран">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/></svg>
+    </button>
+  </div>
+</header>
+
+<main>
+  <!-- ═══════════ РЕЖИМ ═══════════ -->
+  <section class="card">
+    <p class="card-title">Режим расчёта</p>
+    <div class="segmented" id="modeSeg" data-index="0">
+      <div class="thumb"></div>
+      <button type="button" class="active" data-mode="3" aria-pressed="true">3 точки</button>
+      <button type="button" data-mode="4" aria-pressed="false">4 точки</button>
+    </div>
+  </section>
+
+  <!-- ═══════════ ТОЧКИ ═══════════ -->
+  <div id="pointsWrap">
+    <section class="card point-card" data-idx="0">
+      <div class="point-head"><span class="badge">A</span><span class="point-title">Точка A</span></div>
+      <div class="point-row">
+        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки A"></label>
+        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки A"></label>
+        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки A камерой"><span class="cam-ico">📷</span><span class="cam-label">Сканировать камерой</span></button>
+      </div>
+    </section>
+
+    <section class="card point-card" data-idx="1">
+      <div class="point-head"><span class="badge">B</span><span class="point-title">Точка B</span></div>
+      <div class="point-row">
+        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки B"></label>
+        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки B"></label>
+        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки B камерой"><span class="cam-ico">📷</span><span class="cam-label">Сканировать камерой</span></button>
+      </div>
+    </section>
+
+    <section class="card point-card" data-idx="2">
+      <div class="point-head"><span class="badge">C</span><span class="point-title">Точка C</span></div>
+      <div class="point-row">
+        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки C"></label>
+        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки C"></label>
+        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки C камерой"><span class="cam-ico">📷</span><span class="cam-label">Сканировать камерой</span></button>
+      </div>
+    </section>
+
+    <section class="card point-card" data-idx="3" id="pointD" hidden>
+      <div class="point-head"><span class="badge">D</span><span class="point-title">Точка D</span></div>
+      <div class="point-row">
+        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки D"></label>
+        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки D"></label>
+        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки D камерой"><span class="cam-ico">📷</span><span class="cam-label">Сканировать камерой</span></button>
+      </div>
+    </section>
+  </div>
+
+  <!-- ═══════════ ДЕЙСТВИЯ ═══════════ -->
+  <div class="actions">
+    <button type="button" class="btn filled" id="calcBtn">Рассчитать</button>
+    <div class="actions-row">
+      <button type="button" class="btn tinted" id="exampleBtn">Пример</button>
+      <button type="button" class="btn plain" id="clearBtn">Очистить</button>
+    </div>
+  </div>
+
+  <!-- ═══════════ ХОЛСТ ═══════════ -->
+  <section class="card canvas-card">
+    <div class="canvas-wrap">
+      <canvas id="plot"></canvas>
+      <button type="button" class="fit-btn" id="fitBtn">⤢ Вписать</button>
+    </div>
+    <p class="canvas-hint">Жесты: перетаскивание — панорама, щипок — масштаб, двойное нажатие — вписать</p>
+  </section>
+
+  <!-- ═══════════ РЕЗУЛЬТАТ ═══════════ -->
+  <section class="card" id="resultCard" hidden>
+    <p class="card-title">Результат</p>
+    <div class="res-grid">
+      <div class="res-cell"><div class="res-label">X₀ (центр)</div><div class="res-value" id="resX">—</div></div>
+      <div class="res-cell"><div class="res-label">Y₀ (центр)</div><div class="res-value" id="resY">—</div></div>
+      <div class="res-cell"><div class="res-label">R (радиус)</div><div class="res-value" id="resR">—</div></div>
+      <div class="res-cell" id="resErrCell" hidden><div class="res-label">Невязка (RMSE)</div><div class="res-value" id="resErr">—</div></div>
+    </div>
+    <div class="res-eq" id="resEq"></div>
+  </section>
+
+  <!-- ═══════════ ТЕМА ═══════════ -->
+  <section class="card">
+    <button type="button" class="setting-row" id="themeRow">
+      <span class="setting-ico">⚙️</span>
+      <span class="setting-text">
+        <span class="setting-title">Тема оформления</span>
+        <span class="setting-sub" id="themeSub">Авто</span>
+      </span>
+      <span class="chevron">›</span>
+    </button>
+  </section>
+
+  <p class="footer-note">PWA • Работает офлайн • Установите на экран Домой:<br>iOS — «Поделиться → На экран Домой», Android — «Установить приложение»</p>
+</main>
+
+<!-- ═══════════ SHEET: ТЕМА ═══════════ -->
+<div class="sheet-backdrop" id="themeBackdrop" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Выбор темы">
+    <div class="grabber"></div>
+    <h2>Тема оформления</h2>
+    <div class="sheet-card" id="themeList"></div>
+    <button type="button" class="btn tinted" data-close="themeBackdrop" style="width:100%">Закрыть</button>
+  </div>
+</div>
+
+<!-- ═══════════ SHEET: СПРАВКА ═══════════ -->
+<div class="sheet-backdrop" id="infoBackdrop" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Справка">
+    <div class="grabber"></div>
+    <h2>Справка и установка</h2>
+    <div class="sheet-card info-text">
+      <p><b>Калькулятор центра окружности</b> находит центр и радиус по 3 точкам (точно, через серединные перпендикуляры) или по 4 точкам (метод наименьших квадратов с оценкой невязки).</p>
+      <h3>📷 Сканирование камерой (экраны ЧПУ, MCS-блоки)</h3>
+      <p>Наведите рамку на экран с координатами: приложение найдёт именованные строки вида <b>X 38.100</b> и <b>Y 160.367</b> и подставит значения в поля. Строки с единицами «mm» (дополнительные блоки, например G56) игнорируются. Если именованные строки не найдены — берётся первая пара чисел. Распознанный текст можно посмотреть в сворачиваемом блоке «Распознанный текст».</p>
+      <h3>📲 iPhone / iPad (Safari)</h3>
+      <ol>
+        <li>Нажмите кнопку «Поделиться» (квадрат со стрелкой вверх).</li>
+        <li>Выберите «На экран Домой» → «Добавить».</li>
+        <li>Запускайте с домашнего экрана — без элементов браузера.</li>
+      </ol>
+      <h3>🤖 Android (Chrome)</h3>
+      <ol>
+        <li>Меню ⋮ → «Установить приложение» (или появившийся баннер).</li>
+        <li>Подтвердите — ярлык появится на рабочем столе.</li>
+      </ol>
+      <h3>⛶ Полный экран</h3>
+      <p>Кнопка ⛶ в шапке включает полноэкранный режим. В iOS Safari он недоступен — используйте установку «На экран Домой».</p>
+    </div>
+    <button type="button" class="btn tinted" data-close="infoBackdrop" style="width:100%">Закрыть</button>
+  </div>
+</div>
+
+<!-- ═══════════ SHEET: КАМЕРА ═══════════ -->
+<div class="sheet-backdrop" id="camBackdrop" aria-hidden="true">
+  <div class="sheet" role="dialog" aria-modal="true" aria-label="Сканирование координат камерой">
+    <div class="grabber"></div>
+    <h2 id="camTitle">Сканирование координат</h2>
+    <div class="cam-stage">
+      <video id="camVideo" playsinline muted autoplay></video>
+      <div class="cam-reticle" id="camReticle" hidden></div>
+      <div class="cam-msg" id="camMsg"><div class="spinner"></div><span>Запуск камеры…</span></div>
+    </div>
+    <div class="cam-status" id="camStatus">Наведите рамку на экран со строками X и Y (например, X 38.100 / Y 160.367)</div>
+    <details class="cam-debug" id="camDebugWrap" hidden>
+      <summary>Распознанный текст</summary>
+      <pre id="camDebug">—</pre>
+    </details>
+    <div class="cam-actions">
+      <button type="button" class="btn tinted" id="camCancel">Отмена</button>
+      <button type="button" class="btn filled" id="camShot" disabled>Распознать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ TOAST ═══════════ -->
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+'use strict';
+/* ═══════════════════════════════════════════════════════════════
+   КАЛЬКУЛЯТОР ЦЕНТРА ОКРУЖНОСТИ — логика приложения (v1.2)
+   ВАЖНО: переменные холста объявлены в самом начале, чтобы
+   applyTheme() → draw() не падал с ReferenceError (TDZ).
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ---------- DOM-хелперы ---------- */
+const $ = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+/* ---------- Состояние приложения ---------- */
+const LETTERS = ['A', 'B', 'C', 'D'];
+const state = {
+  mode: 3,        // 3 или 4 точки
+  points: [],     // последние рассчитанные точки {x,y,label}
+  result: null    // {cx,cy,R,rmse,mode}
+};
+
+/* ---------- ХОЛСТ: элемент и состояние вида (объявляем РАНЬШЕ всех,
+              кто может вызвать draw()) ---------- */
+const canvas = document.getElementById('plot');
+const ctx = canvas ? canvas.getContext('2d') : null;
+let cw = 300, ch = 320;                  // CSS-размеры холста
+let view = { cx: 0, cy: 0, scale: 50 };  // центр вида (мировые координаты) и px/ед.
+
+/* ---------- Toast ---------- */
+let toastTimer = null;
+function toast(msg, isError){
+  const t = document.getElementById('toast');
+  if(!t) return;
+  t.textContent = msg;
+  t.classList.toggle('error', !!isError);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+/* ═══════════════ ТЕМЫ ═══════════════ */
+const THEMES = [
+  {id:'light',    name:'Светлая',        swatch:'linear-gradient(135deg,#FFFFFF,#F2F2F7)',        meta:'#F2F2F7'},
+  {id:'dark',     name:'Тёмная',         swatch:'linear-gradient(135deg,#2C2C2E,#000000)',        meta:'#000000'},
+  {id:'auto',     name:'Авто (система)', swatch:'linear-gradient(135deg,#FFFFFF 50%,#000000 50%)',meta:null},
+  {id:'midnight', name:'Midnight Blue',  swatch:'linear-gradient(135deg,#28336B,#0B1026)',        meta:'#0B1026'},
+  {id:'sunset',   name:'Sunset',         swatch:'linear-gradient(135deg,#FFC94D,#FF7A45)',        meta:'#FBF0E7'}
+];
+const darkMQ = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+function applyTheme(id){
+  document.documentElement.dataset.theme = id;
+  try{ localStorage.setItem('cc-theme', id); }catch(e){}
+  const th = THEMES.find(t => t.id === id);
+  const isDarkNow = darkMQ ? darkMQ.matches : false;
+  const metaColor = (th && th.meta) ? th.meta : (isDarkNow ? '#000000' : '#F2F2F7');
+  const metaEl = document.querySelector('meta[name="theme-color"]');
+  if(metaEl) metaEl.setAttribute('content', metaColor);
+  const sub = document.getElementById('themeSub');
+  if(sub) sub.textContent = th ? th.name : 'Авто';
+  try{ draw(); }catch(e){ console.error(e); } // перерисовать холст новыми цветами
+}
+function buildThemeList(){
+  const list = document.getElementById('themeList');
+  if(!list) return;
+  const current = document.documentElement.dataset.theme;
+  list.innerHTML = '';
+  THEMES.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'theme-row' + (t.id === current ? ' selected' : '');
+    b.innerHTML = '<span class="swatch" style="background:' + t.swatch + '"></span>' +
+                  '<span class="t-name"></span><span class="check">✓</span>';
+    $('.t-name', b).textContent = t.name;
+    b.addEventListener('click', () => { applyTheme(t.id); buildThemeList(); });
+    list.appendChild(b);
+  });
+}
+function onSchemeChange(){
+  if(document.documentElement.dataset.theme === 'auto') applyTheme('auto');
+}
+if(darkMQ){
+  if(darkMQ.addEventListener) darkMQ.addEventListener('change', onSchemeChange);
+  else if(darkMQ.addListener) darkMQ.addListener(onSchemeChange); // старые iOS
+}
+
+/* ═══════════════ SHEETS (iOS-шторки) ═══════════════ */
+function openSheet(id){
+  const s = document.getElementById(id);
+  if(!s) return;
+  s.classList.add('open');
+  s.setAttribute('aria-hidden', 'false');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet(id){
+  const s = document.getElementById(id);
+  if(!s) return;
+  s.classList.remove('open');
+  s.setAttribute('aria-hidden', 'true');
+  document.body.style.overflow = '';
+}
+$$('.sheet-backdrop').forEach(bd => {
+  bd.addEventListener('click', e => {
+    if(e.target === bd){
+      if(bd.id === 'camBackdrop') closeCameraSheet();
+      else closeSheet(bd.id);
+    }
+  });
+});
+$$('[data-close]').forEach(b => b.addEventListener('click', () => closeSheet(b.dataset.close)));
+const themeRowBtn = document.getElementById('themeRow');
+if(themeRowBtn) themeRowBtn.addEventListener('click', () => { buildThemeList(); openSheet('themeBackdrop'); });
+const infoBtn = document.getElementById('infoBtn');
+if(infoBtn) infoBtn.addEventListener('click', () => openSheet('infoBackdrop'));
+
+/* ═══════════════ ПОЛНОЭКРАННЫЙ РЕЖИМ ═══════════════ */
+function hintIOSFullscreen(){
+  toast('В iOS Safari полный экран недоступен: нажмите «Поделиться» → «На экран Домой» и запускайте с ярлыка.');
+}
+const fsBtn = document.getElementById('fsBtn');
+if(fsBtn) fsBtn.addEventListener('click', () => {
+  const el = document.documentElement;
+  if(document.fullscreenElement || document.webkitFullscreenElement){
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if(exit) exit.call(document);
+    return;
+  }
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if(req){
+    try{
+      const p = req.call(el);
+      if(p && p.catch) p.catch(() => hintIOSFullscreen());
+    }catch(e){ hintIOSFullscreen(); }
+  } else {
+    hintIOSFullscreen();
+  }
+});
+
+/* ═══════════════ РЕЖИМ 3/4 ТОЧКИ ═══════════════ */
+const modeSeg = document.getElementById('modeSeg');
+if(modeSeg){
+  $$('button', modeSeg).forEach((btn, i) => {
+    btn.addEventListener('click', () => {
+      const m = parseInt(btn.dataset.mode, 10);
+      if(state.mode === m) return;
+      state.mode = m;
+      modeSeg.dataset.index = String(i);
+      $$('button', modeSeg).forEach((b, j) => {
+        b.classList.toggle('active', j === i);
+        b.setAttribute('aria-pressed', j === i ? 'true' : 'false');
+      });
+      const dCard = document.getElementById('pointD');
+      if(dCard) dCard.hidden = (state.mode === 3);
+      if(state.result){ try{ calculate(true); }catch(e){ console.error(e); } }
+      draw();
+    });
+  });
+}
+
+/* ═══════════════ ПАРСИНГ И ФОРМАТ ЧИСЕЛ ═══════════════ */
+function parseNum(str){
+  if(str == null) return NaN;
+  const s = String(str).trim().replace(/\s+/g, '').replace(',', '.');
+  if(!s) return NaN;
+  if(!/^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/.test(s)) return NaN;
+  const v = parseFloat(s);
+  return isFinite(v) ? v : NaN;
+}
+function fmt(v){
+  if(v == null || !isFinite(v)) return '—';
+  const a = Math.abs(v);
+  if(a !== 0 && (a < 1e-4 || a >= 1e6)) return v.toExponential(3).replace('.', ',');
+  return String(Math.round(v * 1e4) / 1e4).replace('.', ',');
+}
+function signTerm(v){ // член уравнения окружности: «− 2,5» или «+ 2,5»
+  return v < 0 ? '+ ' + fmt(-v) : '− ' + fmt(v);
+}
+
+/* ═══════════════ МАТЕМАТИКА ═══════════════ */
+/** Точное решение по 3 точкам (пересечение серединных перпендикуляров) */
+function circumcenter3(a, b, c){
+  const d = 2 * ( a.x*(b.y - c.y) + b.x*(c.y - a.y) + c.x*(a.y - b.y) );
+  const scale = Math.abs(a.x)+Math.abs(a.y)+Math.abs(b.x)+Math.abs(b.y)+Math.abs(c.x)+Math.abs(c.y)+1;
+  if(Math.abs(d) < 1e-10 * scale){
+    throw new Error('Точки коллинеарны (лежат на одной прямой) — окружность не существует.');
+  }
+  const a2 = a.x*a.x + a.y*a.y, b2 = b.x*b.x + b.y*b.y, c2 = c.x*c.x + c.y*c.y;
+  const ux = ( a2*(b.y - c.y) + b2*(c.y - a.y) + c2*(a.y - b.y) ) / d;
+  const uy = ( a2*(c.x - b.x) + b2*(a.x - c.x) + c2*(b.x - a.x) ) / d;
+  const R = Math.hypot(a.x - ux, a.y - uy);
+  if(!isFinite(ux) || !isFinite(uy) || !isFinite(R) || R <= 0){
+    throw new Error('Не удалось построить окружность — проверьте, что точки не совпадают.');
+  }
+  return { cx: ux, cy: uy, R: R, rmse: 0 };
+}
+
+/** Решение линейной системы 3×3 (Гаусс с выбором ведущего элемента) */
+function solve3(A, b){
+  const M = [
+    [A[0][0], A[0][1], A[0][2], b[0]],
+    [A[1][0], A[1][1], A[1][2], b[1]],
+    [A[2][0], A[2][1], A[2][2], b[2]]
+  ];
+  for(let col = 0; col < 3; col++){
+    let piv = col;
+    for(let r = col + 1; r < 3; r++) if(Math.abs(M[r][col]) > Math.abs(M[piv][col])) piv = r;
+    if(Math.abs(M[piv][col]) < 1e-14) throw new Error('singular');
+    const tmp = M[col]; M[col] = M[piv]; M[piv] = tmp;
+    for(let r = 0; r < 3; r++){
+      if(r === col) continue;
+      const k = M[r][col] / M[col][col];
+      for(let c = col; c < 4; c++) M[r][c] -= k * M[col][c];
+    }
+  }
+  return [ M[0][3]/M[0][0], M[1][3]/M[1][1], M[2][3]/M[2][2] ];
+}
+
+/** МНК-аппроксимация окружности (система Каса–Кунца):
+ *  x² + y² + D·x + E·y + F = 0 → центр (−D/2, −E/2), R = √(D²/4 + E²/4 − F) */
+function fitCircleLS(pts){
+  const n = pts.length;
+  let Sx=0,Sy=0,Sxx=0,Syy=0,Sxy=0,Sxxx=0,Syyy=0,Sxyy=0,Sxxy=0,Sxz=0,Syz=0,Sz=0;
+  for(const p of pts){
+    const z = p.x*p.x + p.y*p.y;
+    Sx+=p.x; Sy+=p.y; Sxx+=p.x*p.x; Syy+=p.y*p.y; Sxy+=p.x*p.y;
+    Sxxx+=p.x*p.x*p.x; Syyy+=p.y*p.y*p.y;
+    Sxyy+=p.x*p.y*p.y; Sxxy+=p.x*p.x*p.y;
+    Sxz+=p.x*z; Syz+=p.y*z; Sz+=z;
+  }
+  let D, E, F;
+  try{
+    const sol = solve3(
+      [[Sxx,Sxy,Sx],[Sxy,Syy,Sy],[Sx,Sy,n]],
+      [-Sxz, -Syz, -Sz]
+    );
+    D = sol[0]; E = sol[1]; F = sol[2];
+  }catch(e){
+    throw new Error('Вырожденная конфигурация точек — аппроксимация невозможна.');
+  }
+  const cx = -D/2, cy = -E/2;
+  const R2 = D*D/4 + E*E/4 - F;
+  if(!isFinite(cx) || !isFinite(cy) || !(R2 > 0)){
+    throw new Error('Не удалось аппроксимировать окружность — проверьте точки.');
+  }
+  const R = Math.sqrt(R2);
+  let se = 0;
+  for(const p of pts){ const dd = Math.hypot(p.x - cx, p.y - cy) - R; se += dd*dd; }
+  return { cx: cx, cy: cy, R: R, rmse: Math.sqrt(se / n) };
+}
+
+/* ═══════════════ СБОР ВВОДА И РАСЧЁТ ═══════════════ */
+function readPoints(){
+  const cards = $$('.point-card').slice(0, state.mode);
+  const pts = [];
+  $$('.field input').forEach(i => i.classList.remove('err'));
+  for(let i = 0; i < cards.length; i++){
+    const card = cards[i];
+    const ix = $('.in-x', card), iy = $('.in-y', card);
+    const x = parseNum(ix.value), y = parseNum(iy.value);
+    if(isNaN(x) || isNaN(y)){
+      if(isNaN(x)) ix.classList.add('err');
+      if(isNaN(y)) iy.classList.add('err');
+      throw new Error('Точка ' + LETTERS[i] + ': введите корректные числа X и Y (допустимы «−», «.» и «,»).');
+    }
+    pts.push({ x: x, y: y, label: LETTERS[i] });
+  }
+  return pts;
+}
+
+function calculate(silent){
+  let pts;
+  try{ pts = readPoints(); }
+  catch(e){ if(!silent) toast(e.message, true); return; }
+
+  let res;
+  try{
+    res = (state.mode === 3) ? circumcenter3(pts[0], pts[1], pts[2]) : fitCircleLS(pts);
+    res.mode = state.mode;
+  }catch(e){
+    if(!silent) toast(e.message || 'Ошибка расчёта.', true);
+    return;
+  }
+  state.points = pts;
+  state.result = res;
+  renderResult(res);
+  fitView();
+  if(!silent) toast(state.mode === 3 ? 'Окружность построена ✓' : 'Аппроксимация выполнена ✓');
+}
+
+function renderResult(res){
+  $('#resX').textContent = fmt(res.cx);
+  $('#resY').textContent = fmt(res.cy);
+  $('#resR').textContent = fmt(res.R);
+  if(res.mode === 4){
+    $('#resErrCell').hidden = false;
+    $('#resErr').textContent = fmt(res.rmse);
+  } else {
+    $('#resErrCell').hidden = true;
+  }
+  $('#resEq').textContent =
+    '(x ' + signTerm(res.cx) + ')² + (y ' + signTerm(res.cy) + ')² = ' + fmt(res.R) + '²';
+  $('#resultCard').hidden = false;
+}
+
+$('#calcBtn').addEventListener('click', () => calculate(false));
+$$('#pointsWrap input').forEach(inp => {
+  inp.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); calculate(false); } });
+  inp.addEventListener('input', () => inp.classList.remove('err'));
+});
+
+$('#clearBtn').addEventListener('click', () => {
+  $$('#pointsWrap input').forEach(i => { i.value = ''; i.classList.remove('err'); });
+  state.points = [];
+  state.result = null;
+  $('#resultCard').hidden = true;
+  view = { cx: 0, cy: 0, scale: 50 };
+  draw();
+  toast('Поля очищены');
+});
+
+$('#exampleBtn').addEventListener('click', () => {
+  const cards = $$('.point-card');
+  const samples = (state.mode === 3)
+    ? [ {x:'-3',y:'0'}, {x:'0',y:'3'}, {x:'3',y:'0'} ]
+    : [ {x:'3,05',y:'0,12'}, {x:'0,08',y:'2,98'}, {x:'-2,97',y:'-0,15'}, {x:'0,14',y:'-2,94'} ];
+  samples.forEach((s, i) => {
+    $('.in-x', cards[i]).value = s.x;
+    $('.in-y', cards[i]).value = s.y;
+    cards[i].classList.remove('err');
+  });
+  calculate(false);
+});
+
+/* ═══════════════ ХОЛСТ: отрисовка ═══════════════ */
+function cssVar(name){
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+function clampScale(s){ return Math.min(1e8, Math.max(1e-7, s)); }
+function screenToWorld(sx, sy){
+  return { x: (sx - cw/2)/view.scale + view.cx, y: (ch/2 - sy)/view.scale + view.cy };
+}
+function worldToScreen(wx, wy){
+  return { x: (wx - view.cx)*view.scale + cw/2, y: ch/2 - (wy - view.cy)*view.scale };
+}
+function niceStep(scale){
+  const raw = 56 / scale;
+  const pow = Math.pow(10, Math.floor(Math.log10(raw)));
+  const mults = [1, 2, 5, 10];
+  for(let i = 0; i < mults.length; i++) if(mults[i]*pow >= raw) return mults[i]*pow;
+  return 10*pow;
+}
+
+/* Автомасштабирование под точки + окружность с отступами */
+function fitView(){
+  if(!canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  cw = Math.max(1, rect.width); ch = Math.max(1, rect.height);
+  const items = state.points.slice();
+  if(state.result && isFinite(state.result.R)){
+    items.push({ x: state.result.cx - state.result.R, y: state.result.cy - state.result.R });
+    items.push({ x: state.result.cx + state.result.R, y: state.result.cy + state.result.R });
+  }
+  if(items.length === 0){ view = { cx: 0, cy: 0, scale: 50 }; draw(); return; }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for(const p of items){
+    if(!isFinite(p.x) || !isFinite(p.y)) continue;
+    if(p.x < minX) minX = p.x;
+    if(p.x > maxX) maxX = p.x;
+    if(p.y < minY) minY = p.y;
+    if(p.y > maxY) maxY = p.y;
+  }
+  const bw = Math.max(maxX - minX, 1e-9), bh = Math.max(maxY - minY, 1e-9);
+  const pad = 44;
+  const s = clampScale(Math.min((cw - 2*pad)/bw, (ch - 2*pad)/bh));
+  view = { cx: (minX + maxX)/2, cy: (minY + maxY)/2, scale: isFinite(s) ? s : 50 };
+  draw();
+}
+
+function draw(){
+  if(!ctx || !canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  const W = Math.max(1, rect.width), H = Math.max(1, rect.height);
+  cw = W; ch = H;
+  // Retina-чёткость
+  if(canvas.width !== Math.round(W*dpr) || canvas.height !== Math.round(H*dpr)){
+    canvas.width = Math.round(W*dpr);
+    canvas.height = Math.round(H*dpr);
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const cBg     = cssVar('--canvas-bg')    || '#ffffff';
+  const cGrid   = cssVar('--grid')         || '#eeeeee';
+  const cAxis   = cssVar('--axis')         || '#999999';
+  const cText   = cssVar('--text')         || '#000000';
+  const cText2  = cssVar('--text2')        || '#888888';
+  const cAccent = cssVar('--accent')       || '#007AFF';
+  const cPoint  = cssVar('--point-color')  || '#FF9500';
+  const cCenter = cssVar('--center-color') || '#FF3B30';
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = cBg;
+  ctx.fillRect(0, 0, W, H);
+
+  const tl = screenToWorld(0, 0), br = screenToWorld(W, H);
+  const xMin = tl.x, xMax = br.x, yMin = br.y, yMax = tl.y;
+
+  /* — сетка и оси — */
+  const step = niceStep(view.scale);
+  function fmtGrid(v){
+    const a = Math.abs(v);
+    if(a >= 1e6 || (a < 1e-3 && a > 0)) return v.toExponential(1);
+    return String(Math.round(v * 1e6) / 1e6).replace('.', ',');
+  }
+  const origin = worldToScreen(0, 0);
+  const labelY = Math.min(H - 6, Math.max(14, origin.y + 14));
+  const labelX = Math.min(W - 8, Math.max(26, origin.x - 6));
+
+  ctx.lineWidth = 1;
+  ctx.font = '11px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  for(let x = Math.floor(xMin/step)*step; x <= xMax; x += step){
+    const sx = worldToScreen(x, 0).x;
+    const isAxis = Math.abs(x) < step * 1e-6;
+    ctx.strokeStyle = isAxis ? cAxis : cGrid;
+    ctx.beginPath();
+    ctx.moveTo(Math.round(sx) + 0.5, 0);
+    ctx.lineTo(Math.round(sx) + 0.5, H);
+    ctx.stroke();
+    if(!isAxis){
+      ctx.fillStyle = cText2;
+      ctx.fillText(fmtGrid(x), sx, labelY);
+    }
+  }
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for(let y = Math.floor(yMin/step)*step; y <= yMax; y += step){
+    const sy = worldToScreen(0, y).y;
+    const isAxis = Math.abs(y) < step * 1e-6;
+    ctx.strokeStyle = isAxis ? cAxis : cGrid;
+    ctx.beginPath();
+    ctx.moveTo(0, Math.round(sy) + 0.5);
+    ctx.lineTo(W, Math.round(sy) + 0.5);
+    ctx.stroke();
+    ctx.fillStyle = cText2;
+    if(isAxis) ctx.fillText('0', labelX, Math.min(H - 10, sy + 12));
+    else ctx.fillText(fmtGrid(y), labelX, sy);
+  }
+
+  /* — пустое состояние — */
+  if(!state.result){
+    ctx.fillStyle = cText2;
+    ctx.font = '15px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Введите координаты точек', W/2, H/2 - 12);
+    ctx.fillText('и нажмите «Рассчитать»', W/2, H/2 + 12);
+    return;
+  }
+
+  const res = state.result;
+  const cScr = worldToScreen(res.cx, res.cy);
+
+  /* — окружность — */
+  ctx.strokeStyle = cAccent;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(cScr.x, cScr.y, Math.max(0.5, res.R * view.scale), 0, Math.PI*2);
+  ctx.stroke();
+
+  /* — радиус (пунктир к первой точке) — */
+  if(state.points.length){
+    const p0 = state.points[0];
+    const ang = Math.atan2(p0.y - res.cy, p0.x - res.cx);
+    const eScr = worldToScreen(res.cx + res.R*Math.cos(ang), res.cy + res.R*Math.sin(ang));
+    ctx.save();
+    ctx.strokeStyle = cAccent;
+    ctx.globalAlpha = 0.65;
+    ctx.lineWidth = 1.8;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(cScr.x, cScr.y);
+    ctx.lineTo(eScr.x, eScr.y);
+    ctx.stroke();
+    ctx.restore();
+    const mx = (cScr.x + eScr.x)/2, my = (cScr.y + eScr.y)/2;
+    ctx.font = '600 12px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = cBg;
+    ctx.strokeText('R = ' + fmt(res.R), mx, my - 5);
+    ctx.fillStyle = cText;
+    ctx.fillText('R = ' + fmt(res.R), mx, my - 5);
+  }
+
+  /* — точки A/B/C/D — */
+  ctx.font = '700 13px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+  for(const p of state.points){
+    const s = worldToScreen(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 6.5, 0, Math.PI*2);
+    ctx.fillStyle = cPoint;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = cBg;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = cBg;
+    ctx.strokeText(p.label, s.x + 9, s.y - 6);
+    ctx.fillStyle = cText;
+    ctx.fillText(p.label, s.x + 9, s.y - 6);
+  }
+
+  /* — центр: крестик — */
+  ctx.strokeStyle = cCenter;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cScr.x - 9, cScr.y); ctx.lineTo(cScr.x + 9, cScr.y);
+  ctx.moveTo(cScr.x, cScr.y - 9); ctx.lineTo(cScr.x, cScr.y + 9);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cScr.x, cScr.y, 3, 0, Math.PI*2);
+  ctx.fillStyle = cCenter;
+  ctx.fill();
+}
+
+/* ═══════════════ ЖЕСТЫ: pan / pinch / wheel ═══════════════ */
+function zoomAt(sx, sy, factor){
+  const w = screenToWorld(sx, sy);
+  view.scale = clampScale(view.scale * factor);
+  // сохраняем мировую точку под пальцем/курсором
+  view.cx = w.x - (sx - cw/2) / view.scale;
+  view.cy = w.y + (sy - ch/2) / view.scale;
+  draw();
+}
+if(canvas){
+  // Мышь: перетаскивание
+  let mouseDrag = null;
+  canvas.addEventListener('mousedown', e => {
+    mouseDrag = { x: e.clientX, y: e.clientY };
+    canvas.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if(!mouseDrag) return;
+    const dx = e.clientX - mouseDrag.x, dy = e.clientY - mouseDrag.y;
+    mouseDrag = { x: e.clientX, y: e.clientY };
+    view.cx -= dx / view.scale;
+    view.cy += dy / view.scale;
+    draw();
+  });
+  window.addEventListener('mouseup', () => { mouseDrag = null; canvas.classList.remove('dragging'); });
+  canvas.addEventListener('dblclick', () => fitView());
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    zoomAt(e.clientX - rect.left, e.clientY - rect.top, Math.exp(-e.deltaY * 0.0015));
+  }, { passive: false });
+
+  // Тач: 1 палец — pan, 2 пальца — pinch-to-zoom
+  let lastTouch = null, pinch = null, lastTap = 0;
+  function pinchInfo(touches){
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return {
+      dist: Math.hypot(dx, dy),
+      mid: { x: (touches[0].clientX + touches[1].clientX)/2, y: (touches[0].clientY + touches[1].clientY)/2 }
+    };
+  }
+  canvas.addEventListener('touchstart', e => {
+    if(e.touches.length === 1){
+      lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      const now = Date.now();
+      if(now - lastTap < 300) fitView(); // двойное касание → вписать
+      lastTap = now;
+    } else if(e.touches.length === 2){
+      lastTouch = null;
+      pinch = pinchInfo(e.touches);
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if(e.touches.length === 1 && lastTouch){
+      const t = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      view.cx -= (t.x - lastTouch.x) / view.scale;
+      view.cy += (t.y - lastTouch.y) / view.scale;
+      lastTouch = t;
+      draw();
+    } else if(e.touches.length === 2 && pinch){
+      const np = pinchInfo(e.touches);
+      const rect = canvas.getBoundingClientRect();
+      const midX = np.mid.x - rect.left, midY = np.mid.y - rect.top;
+      const prevMidX = pinch.mid.x - rect.left, prevMidY = pinch.mid.y - rect.top;
+      view.cx -= (midX - prevMidX) / view.scale;
+      view.cy += (midY - prevMidY) / view.scale;
+      if(pinch.dist > 0 && np.dist > 0) zoomAt(midX, midY, np.dist / pinch.dist);
+      else draw();
+      pinch = np;
+    }
+  }, { passive: false });
+  canvas.addEventListener('touchend', e => {
+    if(e.touches.length < 2) pinch = null;
+    if(e.touches.length === 0) lastTouch = null;
+  }, { passive: true });
+
+  $('#fitBtn').addEventListener('click', () => fitView());
+
+  if(window.ResizeObserver){
+    new ResizeObserver(() => { try{ draw(); }catch(e){} }).observe(canvas.parentElement);
+  } else {
+    window.addEventListener('resize', () => { try{ draw(); }catch(e){} });
+  }
+  window.addEventListener('orientationchange', () => setTimeout(() => { try{ draw(); }catch(e){} }, 150));
+}
+
+/* ═══════════════ КАМЕРА + OCR (Tesseract.js) ═══════════════ */
+const TESS_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+let camStream = null, activeCard = null, workerPromise = null;
+const camVideo = $('#camVideo'), camMsg = $('#camMsg'), camStatus = $('#camStatus'),
+      camShot = $('#camShot'), camReticle = $('#camReticle');
+
+$$('.cam-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeCard = btn.closest('.point-card');
+    const letter = LETTERS[parseInt(activeCard.dataset.idx, 10)];
+    $('#camTitle').textContent = 'Сканирование — точка ' + letter;
+    openCameraSheet();
+  });
+});
+
+function loadTesseract(){
+  return new Promise((res, rej) => {
+    if(window.Tesseract) return res();
+    const s = document.createElement('script');
+    s.src = TESS_CDN;
+    s.async = true;
+    s.onload = () => res();
+    s.onerror = () => rej(new Error('cdn'));
+    document.head.appendChild(s);
+  });
+}
+function getOcrWorker(){
+  if(!workerPromise){
+    workerPromise = (async () => {
+      await loadTesseract();
+      const w = await Tesseract.createWorker('eng', 1, {
+        logger: m => {
+          if(m.status === 'recognizing text' && typeof m.progress === 'number'){
+            setCamStatus('Распознавание… ' + Math.round(m.progress * 100) + '%', false);
+          }
+        }
+      });
+      try{
+        // Буквы нужны, чтобы OCR читал метки осей «X», «Y» на экранах ЧПУ
+        await w.setParameters({
+          tessedit_char_whitelist: 'XYZACSPM0123456789.,- ',
+          preserve_interword_spaces: '1'
+        });
+      }catch(e){ /* whitelist может игнорироваться LSTM — не критично */ }
+      return w;
+    })().catch(e => { workerPromise = null; throw e; });
+  }
+  return workerPromise;
+}
+
+/* ---------- Разбор текста OCR ---------- */
+/** Все числа из текста (запасной вариант) */
+function extractNumbers(text){
+  const raw = text.match(/[-−–]?\d+(?:[.,]\d+)?/g) || [];
+  return raw
+    .map(s => parseNum(s.replace(/[−–]/g, '-')))
+    .filter(v => !isNaN(v) && isFinite(v));
+}
+/** Поиск именованных строк осей: «X 38.100», «Y: 160.367», «Y160.367».
+ *  Значения с единицами «mm» (доп. блоки, напр. G56) помечаются и
+ *  используются только если основных строк не найдено. */
+function parseAxisValues(text){
+  const found = [];
+  const lines = String(text || '').split(/\r?\n/);
+  const re = /(^|[^A-Za-z])([XY])(?![A-Za-z])\s*[:=]?\s*(-?\d+(?:[.,]\d+)?)/gi;
+  for(const line of lines){
+    const clean = line.replace(/[−–]/g, '-').trim();
+    if(!clean) continue;
+    const hasMM = /\bmm\b/i.test(clean);
+    re.lastIndex = 0;
+    let m;
+    while((m = re.exec(clean)) !== null){
+      const val = parseNum(m[3]);
+      if(!isNaN(val)) found.push({ axis: m[2].toUpperCase(), val: val, mm: hasMM });
+    }
+  }
+  const res = { x: null, y: null };
+  for(const preferMM of [false, true]){
+    for(const r of found){
+      if(r.mm !== preferMM) continue;
+      if(r.axis === 'X' && res.x === null) res.x = r.val;
+      if(r.axis === 'Y' && res.y === null) res.y = r.val;
+    }
+    if(res.x !== null && res.y !== null) break;
+  }
+  return res;
+}
+/** Умное распознавание: перебор режимов разметки (PSM 6 → 3),
+ *  приоритет именованных строк X/Y, запасной вариант — первая пара чисел */
+async function recognizeSmart(off, worker){
+  const modes = ['6', '3'];
+  let bestGeneric = null;
+  const texts = [];
+  for(const psm of modes){
+    try{ await worker.setParameters({ tessedit_pageseg_mode: psm }); }catch(e){}
+    setCamStatus('Распознавание (режим страницы ' + psm + ')…', false);
+    const out = await worker.recognize(off);
+    const text = (out && out.data && out.data.text) || '';
+    texts.push('— PSM ' + psm + ' —\n' + text.trim());
+    const ax = parseAxisValues(text);
+    if(ax.x !== null && ax.y !== null){
+      return { x: ax.x, y: ax.y, labeled: true, text: texts.join('\n\n') };
+    }
+    if(!bestGeneric){
+      const nums = extractNumbers(text);
+      if(nums.length >= 2) bestGeneric = { x: nums[0], y: nums[1], labeled: false, text: texts.join('\n\n') };
+    }
+  }
+  if(bestGeneric) return bestGeneric;
+  return { x: null, y: null, labeled: false, text: texts.join('\n\n') };
+}
+
+/* ---------- Отладочный просмотр распознанного текста ---------- */
+function showDebug(text, open){
+  const wrap = document.getElementById('camDebugWrap');
+  const pre = document.getElementById('camDebug');
+  if(!wrap || !pre) return;
+  pre.textContent = text || '—';
+  wrap.hidden = false;
+  wrap.open = !!open;
+}
+
+async function openCameraSheet(){
+  openSheet('camBackdrop');
+  camMsg.hidden = false;
+  camReticle.hidden = true;
+  camShot.disabled = true;
+  camMsg.innerHTML = '<div class="spinner"></div><span>Запуск камеры…</span>';
+  setCamStatus('Запрашиваем доступ к камере…', false);
+  try{
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw new Error('noapi');
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false
+    });
+    camVideo.srcObject = camStream;
+    try{ await camVideo.play(); }catch(e){}
+    camMsg.hidden = true;
+    camReticle.hidden = false;
+    camShot.disabled = false;
+    setCamStatus('Наведите рамку на экран со строками X и Y (например, X 38.100 / Y 160.367)', false);
+  }catch(e){
+    camMsg.innerHTML = '<span style="font-size:34px">🚫</span><span>' + cameraErrorText(e) + '</span>';
+    camReticle.hidden = true;
+    camShot.disabled = true;
+    setCamStatus('Сканирование недоступно', true);
+  }
+}
+function cameraErrorText(e){
+  const name = e && e.name;
+  if(name === 'NotAllowedError' || name === 'PermissionDeniedError')
+    return 'Доступ к камере запрещён. Разрешите доступ в настройках сайта/браузера и повторите.';
+  if(name === 'NotFoundError' || name === 'DevicesNotFoundError')
+    return 'Камера не найдена на этом устройстве.';
+  if(name === 'NotReadableError' || name === 'TrackStartError')
+    return 'Камера занята другим приложением. Закройте его и повторите.';
+  if(e && e.message === 'noapi')
+    return 'Камера не поддерживается этим браузером (требуется HTTPS или localhost).';
+  if(e && e.message === 'cdn')
+    return 'Не удалось загрузить модуль распознавания (нужен интернет при первом запуске).';
+  return 'Не удалось запустить камеру: ' + ((e && (e.message || e.name)) || 'неизвестная ошибка');
+}
+function setCamStatus(txt, isErr){
+  if(!camStatus) return;
+  camStatus.textContent = txt;
+  camStatus.classList.toggle('error', !!isErr);
+}
+function closeCameraSheet(){
+  if(camStream){ camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  if(camVideo) camVideo.srcObject = null;
+  closeSheet('camBackdrop');
+}
+$('#camCancel').addEventListener('click', closeCameraSheet);
+
+camShot.addEventListener('click', async () => {
+  if(!activeCard) return;
+  if(!camStream || camVideo.readyState < 2){
+    setCamStatus('Видео ещё не готово — подождите секунду.', true);
+    return;
+  }
+  camShot.disabled = true;
+  setCamStatus('Загрузка модуля распознавания…', false);
+  try{
+    const worker = await getOcrWorker();
+    // Подготовка кадра: увеличение + ч/б + контраст — лучше для OCR экранных цифр
+    const vw = camVideo.videoWidth || 640, vh = camVideo.videoHeight || 480;
+    const off = document.createElement('canvas');
+    const k = Math.max(2, Math.min(3, 2200 / Math.max(vw, 1)));
+    off.width = Math.round(vw * k);
+    off.height = Math.round(vh * k);
+    const ox = off.getContext('2d', { willReadFrequently: true });
+    ox.drawImage(camVideo, 0, 0, off.width, off.height);
+    const img = ox.getImageData(0, 0, off.width, off.height);
+    const d = img.data;
+    for(let i = 0; i < d.length; i += 4){
+      let g = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+      g = Math.min(255, Math.max(0, (g - 128) * 1.5 + 128)); // контраст
+      d[i] = d[i+1] = d[i+2] = g;
+    }
+    ox.putImageData(img, 0, 0);
+
+    const res = await recognizeSmart(off, worker);
+    showDebug(res.text, res.x === null || res.y === null);
+
+    if(res.x !== null && res.y !== null){
+      const letter = LETTERS[parseInt(activeCard.dataset.idx, 10)];
+      const ix = $('.in-x', activeCard), iy = $('.in-y', activeCard);
+      ix.value = String(res.x);
+      iy.value = String(res.y);
+      ix.classList.remove('err');
+      iy.classList.remove('err');
+      [ix, iy].forEach(el => {
+        el.classList.add('flash-ok');
+        setTimeout(() => el.classList.remove('flash-ok'), 900);
+      });
+      closeCameraSheet();
+      toast('Точка ' + letter + ': ' + (res.labeled ? 'строки X/Y: ' : 'пара чисел: ') +
+            'X = ' + fmt(res.x) + ', Y = ' + fmt(res.y) + ' ✓');
+    } else {
+      setCamStatus('Не удалось найти строки X и Y. Держите экран в рамке целиком, избегайте бликов — и нажмите «Распознать» ещё раз. Распознанный текст — в блоке ниже.', true);
+    }
+  }catch(e){
+    const msg = (e && e.message === 'cdn')
+      ? 'Модуль OCR недоступен: для первой загрузки нужен интернет. Повторите позже.'
+      : 'Ошибка распознавания. Повторите попытку.';
+    setCamStatus(msg, true);
+  } finally {
+    if(camStream) camShot.disabled = false;
+  }
+});
+
+/* ═══════════════ PWA: иконки, манифест, Service Worker ═══════════════ */
+/** Генерация PNG-иконки (окружность + точки + крестик центра) на canvas */
+function buildIconDataURL(size){
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const x = c.getContext('2d');
+  const S = size;
+  const g = x.createLinearGradient(0, 0, S, S);
+  g.addColorStop(0, '#2C9BFF');
+  g.addColorStop(1, '#4B4BE8');
+  const r = S * 0.2237;
+  x.beginPath();
+  if(x.roundRect){
+    x.roundRect(0, 0, S, S, r);
+  } else {
+    x.moveTo(r, 0);
+    x.arcTo(S, 0, S, S, r);
+    x.arcTo(S, S, 0, S, r);
+    x.arcTo(0, S, 0, 0, r);
+    x.arcTo(0, 0, S, 0, r);
+    x.closePath();
+  }
+  x.fillStyle = g;
+  x.fill();
+  // окружность
+  x.strokeStyle = 'rgba(255,255,255,.95)';
+  x.lineWidth = S * 0.036;
+  x.beginPath();
+  x.arc(S/2, S/2, S*0.27, 0, Math.PI*2);
+  x.stroke();
+  // крестик центра
+  x.lineWidth = S * 0.03;
+  x.beginPath();
+  x.moveTo(S/2 - S*0.075, S/2); x.lineTo(S/2 + S*0.075, S/2);
+  x.moveTo(S/2, S/2 - S*0.075); x.lineTo(S/2, S/2 + S*0.075);
+  x.stroke();
+  // три точки на окружности
+  x.fillStyle = '#FFFFFF';
+  [210, 330, 90].forEach(a => {
+    const rad = a * Math.PI / 180;
+    x.beginPath();
+    x.arc(S/2 + Math.cos(rad)*S*0.27, S/2 - Math.sin(rad)*S*0.27, S*0.048, 0, Math.PI*2);
+    x.fill();
+  });
+  return c.toDataURL('image/png');
+}
+(function setupPWA(){
+  try{
+    const icon192 = buildIconDataURL(192);
+    const icon512 = buildIconDataURL(512);
+    const appleIcon = document.getElementById('appleIcon');
+    if(appleIcon) appleIcon.href = icon192;
+    const manifest = {
+      name: 'Калькулятор центра окружности',
+      short_name: 'Центр окружности',
+      description: 'Центр и радиус окружности по 3 или 4 точкам. Работает офлайн.',
+      lang: 'ru',
+      start_url: '.',
+      scope: '.',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#F2F2F7',
+      theme_color: '#007AFF',
+      icons: [
+        { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    const link = document.getElementById('manifestLink');
+    if(link) link.href = URL.createObjectURL(blob);
+  }catch(e){ console.warn('PWA setup:', e); }
+})();
+
+/* Service Worker для офлайн-кэша.
+   В однофайловом режиме пробуем зарегистрировать код через Blob-URL
+   (браузеры могут отклонить — это нормально, ошибка гасится).
+   Для полноценного офлайн-кэша сохраните код ниже как sw.js рядом с index.html
+   и замените регистрацию на: navigator.serviceWorker.register('sw.js')
+
+   ── sw.js ──────────────────────────────────────────────
+   var CACHE='circle-center-v1';
+   self.addEventListener('install',function(e){self.skipWaiting();});
+   self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});
+   self.addEventListener('fetch',function(e){
+     if(e.request.method!=='GET')return;
+     e.respondWith(fetch(e.request).then(function(r){
+       var copy=r.clone();
+       caches.open(CACHE).then(function(c){try{c.put(e.request,copy);}catch(x){}});
+       return r;
+     }).catch(function(){return caches.match(e.request);});
+   });
+   ─────────────────────────────────────────────────────── */
+(function setupSW(){
+  if(!('serviceWorker' in navigator)) return;
+  if(!location.protocol.startsWith('http')) return; // file:// — пропускаем
+  const SW_CODE = [
+    "var CACHE='circle-center-v1';",
+    "self.addEventListener('install',function(e){self.skipWaiting();});",
+    "self.addEventListener('activate',function(e){e.waitUntil(self.clients.claim());});",
+    "self.addEventListener('fetch',function(e){",
+    " if(e.request.method!=='GET')return;",
+    " e.respondWith(fetch(e.request).then(function(r){",
+    "  var copy=r.clone();",
+    "  caches.open(CACHE).then(function(c){try{c.put(e.request,copy);}catch(x){}});",
+    "  return r;",
+    " }).catch(function(){return caches.match(e.request);}",
+    " ));",
+    "});"
+  ].join('\n');
+  try{
+    const url = URL.createObjectURL(new Blob([SW_CODE], { type: 'text/javascript' }));
+    const reg = navigator.serviceWorker.register(url);
+    if(reg && reg.catch) reg.catch(() => {});
+  }catch(e){}
+})();
+
+/* ═══════════════ СТАРТ (в самом конце, когда всё объявлено) ═══════════════ */
+(function startup(){
+  let saved = 'auto';
+  try{ saved = localStorage.getItem('cc-theme') || 'auto'; }catch(e){}
+  if(!THEMES.some(t => t.id === saved)) saved = 'auto';
+  applyTheme(saved);   // тема + первая отрисовка
+  buildThemeList();
+  draw();
+  window.addEventListener('load', () => setTimeout(() => { try{ draw(); }catch(e){} }, 60));
+})();
+</script>
+</body>
+</html>

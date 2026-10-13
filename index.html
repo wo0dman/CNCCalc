@@ -136,6 +136,12 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 }
 .icon-btn:active{transform:scale(.92);opacity:.7}
 .icon-btn svg{width:22px;height:22px}
+.header-badge{
+  width:36px;height:36px;border-radius:11px;flex-shrink:0;
+  background:var(--accent-soft);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;
+}
+.header-badge svg{width:20px;height:20px;display:block}
 
 /* ═══════════════ КАРТОЧКИ ═══════════════ */
 .card{
@@ -147,11 +153,12 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 /* ═══════════════ iOS SEGMENTED CONTROL ═══════════════ */
 .segmented{position:relative;display:flex;background:var(--seg-bg);border-radius:12px;padding:2px}
 .segmented .thumb{
-  position:absolute;top:2px;bottom:2px;left:2px;width:calc(50% - 2px);
+  position:absolute;top:2px;bottom:2px;left:2px;width:calc((100% - 4px)/3);
   background:var(--seg-thumb);border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.18);
   transition:transform .25s cubic-bezier(.4,0,.2,1);
 }
 .segmented[data-index="1"] .thumb{transform:translateX(100%)}
+.segmented[data-index="2"] .thumb{transform:translateX(200%)}
 .segmented button{
   position:relative;z-index:1;flex:1;min-height:40px;font-size:15px;font-weight:600;color:var(--text2);
   border-radius:10px;transition:color .25s cubic-bezier(.4,0,.2,1);
@@ -231,6 +238,8 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 
 /* ═══════════════ НАСТРОЙКИ ТЕМЫ ═══════════════ */
 .setting-row{display:flex;align-items:center;gap:12px;min-height:44px;width:100%;text-align:left}
+.settings-card{padding:0 16px}
+.settings-card .setting-row + .setting-row{border-top:.5px solid var(--sep)}
 .setting-ico{width:34px;height:34px;border-radius:9px;background:var(--accent-soft);color:var(--accent);display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .setting-ico svg{width:19px;height:19px;display:block}
 .setting-text{flex:1;min-width:0}
@@ -326,13 +335,14 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 <!-- ═══════════ HEADER ═══════════ -->
 <header class="header">
   <div class="header-inner">
-    <h1>⊙ Центр окружности</h1>
-    <button class="icon-btn" id="infoBtn" type="button" aria-label="Справка и установка">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor" stroke="none"/></svg>
-    </button>
-    <button class="icon-btn" id="fsBtn" type="button" aria-label="На весь экран">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/></svg>
-    </button>
+    <h1>ЧПУ Искатель</h1>
+    <span class="header-badge" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="9"/>
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 1v3M12 20v3M1 12h3M20 12h3"/>
+      </svg>
+    </span>
   </div>
 </header>
 
@@ -340,11 +350,12 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
   <!-- ═══════════ РЕЖИМ ═══════════ -->
   <section class="card">
     <p class="card-title">Режим расчёта</p>
-    <div class="segmented" id="modeSeg" data-index="0">
-      <div class="thumb"></div>
-      <button type="button" class="active" data-mode="3" aria-pressed="true">3 точки</button>
-      <button type="button" data-mode="4" aria-pressed="false">4 точки</button>
-    </div>
+    <div class="segmented" id="modeSeg" data-index="1">
+  <div class="thumb"></div>
+  <button type="button" data-mode="2" aria-pressed="false">2 точки</button>
+  <button type="button" class="active" data-mode="3" aria-pressed="true">3 точки</button>
+  <button type="button" data-mode="4" aria-pressed="false">4 точки</button>
+</div>
   </section>
 
   <!-- ═══════════ ТОЧКИ ═══════════ -->
@@ -388,12 +399,9 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 
   <!-- ═══════════ ДЕЙСТВИЯ ═══════════ -->
   <div class="actions">
-    <button type="button" class="btn filled" id="calcBtn">Рассчитать</button>
-    <div class="actions-row">
-      <button type="button" class="btn tinted" id="exampleBtn">Пример</button>
-      <button type="button" class="btn plain" id="clearBtn">Очистить</button>
-    </div>
-  </div>
+  <button type="button" class="btn filled" id="calcBtn">Рассчитать</button>
+  <button type="button" class="btn tinted" id="clearBtn">Очистить</button>
+</div>
 
   <!-- ═══════════ ХОЛСТ ═══════════ -->
   <section class="card canvas-card">
@@ -406,18 +414,34 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 
   <!-- ═══════════ РЕЗУЛЬТАТ ═══════════ -->
   <section class="card" id="resultCard" hidden>
-    <p class="card-title">Результат</p>
-    <div class="res-grid">
-      <div class="res-cell"><div class="res-label">X₀ (центр)</div><div class="res-value" id="resX">—</div></div>
-      <div class="res-cell"><div class="res-label">Y₀ (центр)</div><div class="res-value" id="resY">—</div></div>
-      <div class="res-cell"><div class="res-label">R (радиус)</div><div class="res-value" id="resR">—</div></div>
-      <div class="res-cell" id="resErrCell" hidden><div class="res-label">Невязка (RMSE)</div><div class="res-value" id="resErr">—</div></div>
-    </div>
-    <div class="res-eq" id="resEq"></div>
-  </section>
+  <p class="card-title" id="resTitle">Результат</p>
+  <div class="res-grid">
+    <div class="res-cell"><div class="res-label" id="resL1">X₀ (центр)</div><div class="res-value" id="resV1">—</div></div>
+    <div class="res-cell"><div class="res-label" id="resL2">Y₀ (центр)</div><div class="res-value" id="resV2">—</div></div>
+    <div class="res-cell"><div class="res-label" id="resL3">R (радиус)</div><div class="res-value" id="resV3">—</div></div>
+    <div class="res-cell" id="resCell4"><div class="res-label" id="resL4">Невязка (RMSE)</div><div class="res-value" id="resV4">—</div></div>
+  </div>
+  <div class="res-eq" id="resEq"></div>
+</section>
 
-  <!-- ═══════════ ТЕМА ═══════════ -->
-<section class="card">
+  <!-- ═══════════ НАСТРОЙКИ ═══════════ -->
+<section class="card settings-card">
+  <button type="button" class="setting-row" id="infoRow">
+    <span class="setting-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.6" r="1.15" fill="currentColor" stroke="none"/></svg></span>
+    <span class="setting-text">
+      <span class="setting-title">Справка и установка</span>
+      <span class="setting-sub">Инструкция по работе и установке</span>
+    </span>
+    <span class="chevron">›</span>
+  </button>
+  <button type="button" class="setting-row" id="fsRow">
+    <span class="setting-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V5.5A1.5 1.5 0 0 1 5.5 4H9"/><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5V9"/><path d="M20 15v3.5a1.5 1.5 0 0 1-1.5 1.5H15"/><path d="M9 20H5.5A1.5 1.5 0 0 1 4 18.5V15"/></svg></span>
+    <span class="setting-text">
+      <span class="setting-title">Полный экран</span>
+      <span class="setting-sub">Скрыть элементы браузера</span>
+    </span>
+    <span class="chevron">›</span>
+  </button>
   <button type="button" class="setting-row" id="themeRow">
     <span class="setting-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></span>
     <span class="setting-text">
@@ -603,15 +627,14 @@ $$('.sheet-backdrop').forEach(bd => {
 $$('[data-close]').forEach(b => b.addEventListener('click', () => closeSheet(b.dataset.close)));
 const themeRowBtn = document.getElementById('themeRow');
 if(themeRowBtn) themeRowBtn.addEventListener('click', () => { buildThemeList(); openSheet('themeBackdrop'); });
-const infoBtn = document.getElementById('infoBtn');
-if(infoBtn) infoBtn.addEventListener('click', () => openSheet('infoBackdrop'));
-
+const infoRowBtn = document.getElementById('infoRow');
+if(infoRowBtn) infoRowBtn.addEventListener('click', () => openSheet('infoBackdrop'));
 /* ═══════════════ ПОЛНОЭКРАННЫЙ РЕЖИМ ═══════════════ */
 function hintIOSFullscreen(){
   toast('В iOS Safari полный экран недоступен: нажмите «Поделиться» → «На экран Домой» и запускайте с ярлыка.');
 }
-const fsBtn = document.getElementById('fsBtn');
-if(fsBtn) fsBtn.addEventListener('click', () => {
+const fsRow = document.getElementById('fsRow');
+if(fsRow) fsRow.addEventListener('click', () => {
   const el = document.documentElement;
   if(document.fullscreenElement || document.webkitFullscreenElement){
     const exit = document.exitFullscreen || document.webkitExitFullscreen;
@@ -642,11 +665,17 @@ if(modeSeg){
         b.classList.toggle('active', j === i);
         b.setAttribute('aria-pressed', j === i ? 'true' : 'false');
       });
-      const dCard = document.getElementById('pointD');
-      if(dCard) dCard.hidden = (state.mode === 3);
+      updateVisiblePoints();
       if(state.result){ try{ calculate(true); }catch(e){ console.error(e); } }
       draw();
     });
+  });
+}
+
+function updateVisiblePoints(){
+  $$('.point-card').forEach(card => {
+    const idx = parseInt(card.dataset.idx, 10);
+    card.hidden = idx >= state.mode;
   });
 }
 
@@ -740,7 +769,22 @@ function fitCircleLS(pts){
   for(const p of pts){ const dd = Math.hypot(p.x - cx, p.y - cy) - R; se += dd*dd; }
   return { cx: cx, cy: cy, R: R, rmse: Math.sqrt(se / n) };
 }
-
+/** Угол между двумя точками: наклон отрезка AB к оси X.
+ *  Возвращает основной угол (0…360) и зеркальный (360 − угол).
+ *  Пример: 10° и 350° — потому что по двум точкам нельзя отличить
+ *  направление «вверх» от «вниз» относительно оси X. */
+function angleFromTwoPoints(a, b){
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len = Math.hypot(dx, dy);
+  if(len < 1e-12){
+    throw new Error('Точки совпадают — угол не определён.');
+  }
+  let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+  ang = ((ang % 360) + 360) % 360;      // нормализуем к [0; 360)
+  const mirror = (360 - ang) % 360;     // зеркальный угол (350 для 10°)
+  return { angle: ang, mirror: mirror, length: len, mode: 2 };
+}
 /* ═══════════════ СБОР ВВОДА И РАСЧЁТ ═══════════════ */
 function readPoints(){
   const cards = $$('.point-card').slice(0, state.mode);
@@ -767,7 +811,9 @@ function calculate(silent){
 
   let res;
   try{
-    res = (state.mode === 3) ? circumcenter3(pts[0], pts[1], pts[2]) : fitCircleLS(pts);
+    if(state.mode === 2)        res = angleFromTwoPoints(pts[0], pts[1]);
+    else if(state.mode === 3)   res = circumcenter3(pts[0], pts[1], pts[2]);
+    else                        res = fitCircleLS(pts);
     res.mode = state.mode;
   }catch(e){
     if(!silent) toast(e.message || 'Ошибка расчёта.', true);
@@ -777,21 +823,52 @@ function calculate(silent){
   state.result = res;
   renderResult(res);
   fitView();
-  if(!silent) toast(state.mode === 3 ? 'Окружность построена ✓' : 'Аппроксимация выполнена ✓');
+  if(!silent){
+    let msg = 'Готово ✓';
+    if(state.mode === 2)      msg = 'Угол рассчитан ✓';
+    else if(state.mode === 3) msg = 'Окружность построена ✓';
+    else                      msg = 'Аппроксимация выполнена ✓';
+    toast(msg);
+  }
 }
 
 function renderResult(res){
-  $('#resX').textContent = fmt(res.cx);
-  $('#resY').textContent = fmt(res.cy);
-  $('#resR').textContent = fmt(res.R);
-  if(res.mode === 4){
-    $('#resErrCell').hidden = false;
-    $('#resErr').textContent = fmt(res.rmse);
+  if(res.mode === 2){
+    $('#resTitle').textContent = 'Угол между точками';
+    $('#resL1').textContent = 'Угол 1';
+    $('#resV1').textContent = fmt(res.angle) + '°';
+    $('#resL2').textContent = 'Угол 2 (зеркальный)';
+    $('#resV2').textContent = fmt(res.mirror) + '°';
+    $('#resL3').textContent = 'Длина AB';
+    $('#resV3').textContent = fmt(res.length);
+    $('#resCell4').hidden = true;
+    $('#resEq').textContent =
+      'Наклон прямой AB от оси X: ' + fmt(res.angle) + '° или ' + fmt(res.mirror) + '°';
+  } else if(res.mode === 3){
+    $('#resTitle').textContent = 'Центр окружности';
+    $('#resL1').textContent = 'X₀ (центр)';
+    $('#resV1').textContent = fmt(res.cx);
+    $('#resL2').textContent = 'Y₀ (центр)';
+    $('#resV2').textContent = fmt(res.cy);
+    $('#resL3').textContent = 'R (радиус)';
+    $('#resV3').textContent = fmt(res.R);
+    $('#resCell4').hidden = true;
+    $('#resEq').textContent =
+      '(x ' + signTerm(res.cx) + ')² + (y ' + signTerm(res.cy) + ')² = ' + fmt(res.R) + '²';
   } else {
-    $('#resErrCell').hidden = true;
+    $('#resTitle').textContent = 'Аппроксимация окружности';
+    $('#resL1').textContent = 'X₀ (центр)';
+    $('#resV1').textContent = fmt(res.cx);
+    $('#resL2').textContent = 'Y₀ (центр)';
+    $('#resV2').textContent = fmt(res.cy);
+    $('#resL3').textContent = 'R (радиус)';
+    $('#resV3').textContent = fmt(res.R);
+    $('#resCell4').hidden = false;
+    $('#resL4').textContent = 'Невязка (RMSE)';
+    $('#resV4').textContent = fmt(res.rmse);
+    $('#resEq').textContent =
+      '(x ' + signTerm(res.cx) + ')² + (y ' + signTerm(res.cy) + ')² = ' + fmt(res.R) + '²';
   }
-  $('#resEq').textContent =
-    '(x ' + signTerm(res.cx) + ')² + (y ' + signTerm(res.cy) + ')² = ' + fmt(res.R) + '²';
   $('#resultCard').hidden = false;
 }
 
@@ -811,18 +888,6 @@ $('#clearBtn').addEventListener('click', () => {
   toast('Поля очищены');
 });
 
-$('#exampleBtn').addEventListener('click', () => {
-  const cards = $$('.point-card');
-  const samples = (state.mode === 3)
-    ? [ {x:'-3',y:'0'}, {x:'0',y:'3'}, {x:'3',y:'0'} ]
-    : [ {x:'3,05',y:'0,12'}, {x:'0,08',y:'2,98'}, {x:'-2,97',y:'-0,15'}, {x:'0,14',y:'-2,94'} ];
-  samples.forEach((s, i) => {
-    $('.in-x', cards[i]).value = s.x;
-    $('.in-y', cards[i]).value = s.y;
-    cards[i].classList.remove('err');
-  });
-  calculate(false);
-});
 
 /* ═══════════════ ХОЛСТ: отрисовка ═══════════════ */
 function cssVar(name){
@@ -953,6 +1018,13 @@ function draw(){
   }
 
   const res = state.result;
+
+  /* — режим «2 точки»: рисуем отрезок AB и метку угла — */
+  if(res.mode === 2){
+    drawAngleScene(res);
+    return;
+  }
+
   const cScr = worldToScreen(res.cx, res.cy);
 
   /* — окружность — */
@@ -1019,6 +1091,74 @@ function draw(){
   ctx.arc(cScr.x, cScr.y, 3, 0, Math.PI*2);
   ctx.fillStyle = cCenter;
   ctx.fill();
+}
+
+function drawAngleScene(res){
+  if(state.points.length < 2) return;
+  const cBg     = cssVar('--canvas-bg')    || '#ffffff';
+  const cText   = cssVar('--text')         || '#000000';
+  const cText2  = cssVar('--text2')        || '#888888';
+  const cAccent = cssVar('--accent')       || '#007AFF';
+  const cPoint  = cssVar('--point-color')  || '#FF9500';
+
+  const a = state.points[0], b = state.points[1];
+  const sa = worldToScreen(a.x, a.y);
+  const sb = worldToScreen(b.x, b.y);
+
+  /* Пунктирная базовая линия от A вдоль оси X */
+  const dxLen = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+  const refEnd = worldToScreen(a.x + dxLen, a.y);
+  ctx.save();
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = cText2;
+  ctx.globalAlpha = 0.6;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(sa.x, sa.y);
+  ctx.lineTo(refEnd.x, refEnd.y);
+  ctx.stroke();
+  ctx.restore();
+
+  /* Отрезок AB */
+  ctx.strokeStyle = cAccent;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(sa.x, sa.y);
+  ctx.lineTo(sb.x, sb.y);
+  ctx.stroke();
+
+  /* Точки A и B */
+  ctx.font = '700 13px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+  for(const p of state.points){
+    const s = worldToScreen(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 6.5, 0, Math.PI*2);
+    ctx.fillStyle = cPoint;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = cBg;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = cBg;
+    ctx.strokeText(p.label, s.x + 9, s.y - 6);
+    ctx.fillStyle = cText;
+    ctx.fillText(p.label, s.x + 9, s.y - 6);
+  }
+
+  /* Метка угла в середине отрезка */
+  const mx = (sa.x + sb.x) / 2;
+  const my = (sa.y + sb.y) / 2;
+  const labelText = fmt(res.angle) + '° / ' + fmt(res.mirror) + '°';
+  ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'bottom';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = cBg;
+  ctx.strokeText(labelText, mx, my - 8);
+  ctx.fillStyle = cText;
+  ctx.fillText(labelText, mx, my - 8);
 }
 
 /* ═══════════════ ЖЕСТЫ: pan / pinch / wheel ═══════════════ */
@@ -1418,8 +1558,9 @@ function buildIconDataURL(size){
   let saved = 'auto';
   try{ saved = localStorage.getItem('cc-theme') || 'auto'; }catch(e){}
   if(!THEMES.some(t => t.id === saved)) saved = 'auto';
-  applyTheme(saved);   // тема + первая отрисовка
+  applyTheme(saved);
   buildThemeList();
+  updateVisiblePoints();
   draw();
   window.addEventListener('load', () => setTimeout(() => { try{ draw(); }catch(e){} }, 60));
 })();

@@ -168,12 +168,13 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 /* ═══════════════ ТОЧКИ ═══════════════ */
 .point-card{padding:14px 16px}
 .point-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.point-head .cam-btn{margin-left:auto}
 .badge{
   width:30px;height:30px;border-radius:50%;background:var(--accent);color:#fff;
   display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;flex-shrink:0;
 }
 .point-title{font-size:16px;font-weight:600}
-.point-row{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:end}
+.point-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end}
 .field{display:flex;flex-direction:column;gap:5px;min-width:0}
 .field-cap{font-size:12px;font-weight:600;color:var(--text2);padding-left:4px}
 .field input{
@@ -187,14 +188,21 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 .field input.err{box-shadow:0 0 0 2px var(--danger)}
 .field input.flash-ok{box-shadow:0 0 0 3px rgba(52,199,89,.4)}
 .cam-btn{
-  height:52px;min-width:52px;padding:0 14px;border-radius:12px;background:var(--accent-soft);color:var(--accent);
-  display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;white-space:nowrap;
+  height:38px;min-width:44px;padding:0 12px;border-radius:11px;
+  background:var(--accent-soft);color:var(--accent);
+  display:inline-flex;align-items:center;gap:6px;
+  font-size:13px;font-weight:600;white-space:nowrap;
+  flex-shrink:0;
   transition:transform .25s cubic-bezier(.4,0,.2,1),opacity .25s cubic-bezier(.4,0,.2,1);
 }
 .cam-btn:active{transform:scale(.94);opacity:.75}
-.cam-btn .cam-ico{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-.cam-btn .cam-ico svg{width:20px;height:20px;display:block}
-@media (max-width:479px){.cam-btn .cam-label{display:none}.cam-btn{padding:0;width:52px;justify-content:center}}
+.cam-btn .cam-ico{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.cam-btn .cam-ico svg{width:18px;height:18px;display:block}
+/* На узких экранах оставляем только иконку */
+@media (max-width:479px){
+  .cam-btn .cam-label{display:none}
+  .cam-btn{padding:0;width:38px;justify-content:center}
+}
 
 /* ═══════════════ КНОПКИ ═══════════════ */
 .actions{display:grid;grid-template-columns:1fr;gap:10px;margin:16px 0 14px}
@@ -475,40 +483,64 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
   <!-- ═══════════ ТОЧКИ ═══════════ -->
   <div id="pointsWrap">
     <section class="card point-card" data-idx="0">
-      <div class="point-head"><span class="badge">A</span><span class="point-title">Точка A</span></div>
-      <div class="point-row">
-        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки A"></label>
-        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки A"></label>
-       <button type="button" class="cam-btn" aria-label="Сканировать координаты точки A камерой"></span><span class="cam-label"></span><span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="cam-label"></span></button>
-      </div>
-    </section>
+  <div class="point-head">
+    <span class="badge">A</span>
+    <span class="point-title">Точка A</span>
+    <button type="button" class="cam-btn" aria-label="Сканировать координаты точки A камерой">
+      <span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      <span class="cam-label">Сканировать</span>
+    </button>
+  </div>
+  <div class="point-row">
+    <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки A"></label>
+    <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки A"></label>
+  </div>
+</section>
 
     <section class="card point-card" data-idx="1">
-      <div class="point-head"><span class="badge">B</span><span class="point-title">Точка B</span></div>
-      <div class="point-row">
-        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки B"></label>
-        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки B"></label>
-        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки B камерой"></span><span class="cam-label"></span><span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="cam-label"></span></button>
-      </div>
-    </section>
+  <div class="point-head">
+    <span class="badge">B</span>
+    <span class="point-title">Точка B</span>
+    <button type="button" class="cam-btn" aria-label="Сканировать координаты точки B камерой">
+      <span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      <span class="cam-label">Сканировать</span>
+    </button>
+  </div>
+  <div class="point-row">
+    <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки B"></label>
+    <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки B"></label>
+  </div>
+</section>
 
     <section class="card point-card" data-idx="2">
-      <div class="point-head"><span class="badge">C</span><span class="point-title">Точка C</span></div>
-      <div class="point-row">
-        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки C"></label>
-        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки C"></label>
-        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки C камерой"></span><span class="cam-label"></span><span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="cam-label"></span></button>
-      </div>
-    </section>
+  <div class="point-head">
+    <span class="badge">C</span>
+    <span class="point-title">Точка C</span>
+    <button type="button" class="cam-btn" aria-label="Сканировать координаты точки C камерой">
+      <span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      <span class="cam-label">Сканировать</span>
+    </button>
+  </div>
+  <div class="point-row">
+    <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки C"></label>
+    <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки C"></label>
+  </div>
+</section>
 
     <section class="card point-card" data-idx="3" id="pointD" hidden>
-      <div class="point-head"><span class="badge">D</span><span class="point-title">Точка D</span></div>
-      <div class="point-row">
-        <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки D"></label>
-        <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки D"></label>
-        <button type="button" class="cam-btn" aria-label="Сканировать координаты точки D камерой"></span><span class="cam-label"></span><span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="cam-label"></span></button>
-      </div>
-    </section>
+  <div class="point-head">
+    <span class="badge">D</span>
+    <span class="point-title">Точка D</span>
+    <button type="button" class="cam-btn" aria-label="Сканировать координаты точки D камерой">
+      <span class="cam-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+      <span class="cam-label">Сканировать</span>
+    </button>
+  </div>
+  <div class="point-row">
+    <label class="field"><span class="field-cap">X</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-x" aria-label="X координата точки D"></label>
+    <label class="field"><span class="field-cap">Y</span><input type="text" inputmode="decimal" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="0,0" class="in-y" aria-label="Y координата точки D"></label>
+  </div>
+</section>
   </div>
 
   <!-- ═══════════ ДЕЙСТВИЯ ═══════════ -->
@@ -1274,12 +1306,29 @@ function renderResult(res){
 }
 
 $('#calcBtn').addEventListener('click', () => calculate(false));
+/* Автоусадка шрифта: если число не помещается в поле — 
+   уменьшаем размер шрифта, пока не влезет (минимум 14px). */
+function fitInputFont(inp){
+  const baseSize = 22;
+  const minSize = 14;
+  inp.style.fontSize = baseSize + 'px';
+  // Если контент шире, чем поле — уменьшаем шаг за шагом
+  let size = baseSize;
+  while(size > minSize && inp.scrollWidth > inp.clientWidth){
+    size -= 1;
+    inp.style.fontSize = size + 'px';
+  }
+}
+
 $$('#pointsWrap input').forEach(inp => {
   inp.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); calculate(false); } });
   inp.addEventListener('input', () => {
     inp.classList.remove('err');
-    scheduleDraftSave();          // <-- тихо сохраняем черновик
+    fitInputFont(inp);            // <-- подгоняем шрифт под длину
+    scheduleDraftSave();
   });
+  // При восстановлении черновика — тоже проверяем
+  fitInputFont(inp);
 });
 
 $('#clearBtn').addEventListener('click', () => {

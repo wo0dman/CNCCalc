@@ -266,6 +266,12 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
   box-shadow:0 -8px 40px rgba(0,0,0,.25);
 }
 .sheet-backdrop.open .sheet{transform:translateY(0)}
+/* Камера: чуть выше, чтобы кнопка «Распознать» оказалась около середины экрана */
+#camBackdrop .sheet{max-height:88vh;padding-top:14px}
+@media (min-width:600px){
+  #camBackdrop{display:flex;align-items:flex-end;justify-content:center}
+  #camBackdrop .sheet{max-width:520px;border-radius:22px;margin-bottom:24px}
+}
 .grabber{width:36px;height:5px;border-radius:3px;background:var(--text2);opacity:.4;margin:6px auto 12px}
 .sheet h2{font-size:20px;font-weight:700;margin:4px 0 14px;text-align:center;letter-spacing:-.3px}
 .sheet-card{background:var(--card);border-radius:16px;padding:6px 16px;margin-bottom:14px;box-shadow:var(--shadow)}
@@ -377,8 +383,24 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
 .help-sub:first-of-type{margin-top:6px}
 
 /* ═══════════════ КАМЕРА / OCR ═══════════════ */
-.cam-stage{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3;margin-bottom:12px}
+.cam-stage{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:4/3;margin-bottom:12px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.cam-stage:active{opacity:.97}
+.cam-stage.scanning{cursor:progress}
 .cam-stage video{width:100%;height:100%;object-fit:cover;display:block}
+.cam-tap-hint{
+  position:absolute;left:50%;bottom:10px;transform:translateX(-50%);
+  padding:6px 14px;border-radius:14px;
+  background:rgba(0,0,0,.55);color:#fff;
+  font-size:12px;font-weight:600;letter-spacing:.2px;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  pointer-events:none;white-space:nowrap;
+  animation:tapPulse 2.2s ease-in-out infinite;
+}
+@keyframes tapPulse{
+  0%,100%{opacity:.75}
+  50%{opacity:1}
+}
+.cam-stage.scanning .cam-tap-hint{display:none}
 .cam-reticle{
   position:absolute;left:8%;right:8%;top:12%;bottom:12%;
   border:2px solid rgba(255,255,255,.85);border-radius:14px;pointer-events:none;
@@ -723,11 +745,12 @@ main{max-width:640px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-i
   <div class="sheet" role="dialog" aria-modal="true" aria-label="Сканирование координат камерой">
     <div class="grabber"></div>
     <h2 id="camTitle">Сканирование координат</h2>
-    <div class="cam-stage">
-      <video id="camVideo" playsinline muted autoplay></video>
-      <div class="cam-reticle" id="camReticle" hidden></div>
-      <div class="cam-msg" id="camMsg"><div class="spinner"></div><span>Запуск камеры…</span></div>
-    </div>
+    <div class="cam-stage" id="camStage" role="button" tabindex="0" aria-label="Нажмите для распознавания">
+  <video id="camVideo" playsinline muted autoplay></video>
+  <div class="cam-reticle" id="camReticle" hidden></div>
+  <div class="cam-msg" id="camMsg"><div class="spinner"></div><span>Запуск камеры…</span></div>
+  <div class="cam-tap-hint" id="camTapHint">Нажмите для распознавания</div>
+</div>
     <div class="cam-status" id="camStatus">Наведите рамку на экран со строками X и Y (например, X 38.100 / Y 160.367)</div>
     <details class="cam-debug" id="camDebugWrap" hidden>
       <summary>Распознанный текст</summary>
@@ -1820,6 +1843,7 @@ const TESS_CDN = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min
 let camStream = null, activeCard = null, workerPromise = null;
 const camVideo = $('#camVideo'), camMsg = $('#camMsg'), camStatus = $('#camStatus'),
       camShot = $('#camShot'), camReticle = $('#camReticle');
+      const camStage = $('#camStage');
 
 $$('.cam-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -1989,13 +2013,14 @@ function closeCameraSheet(){
 }
 $('#camCancel').addEventListener('click', closeCameraSheet);
 
-camShot.addEventListener('click', async () => {
+async function runRecognition(){
   if(!activeCard) return;
   if(!camStream || camVideo.readyState < 2){
     setCamStatus('Видео ещё не готово — подождите секунду.', true);
     return;
   }
   camShot.disabled = true;
+  if(camStage) camStage.classList.add('scanning');
   setCamStatus('Загрузка модуля распознавания…', false);
   try{
     const worker = await getOcrWorker();
@@ -2043,8 +2068,33 @@ camShot.addEventListener('click', async () => {
     setCamStatus(msg, true);
   } finally {
     if(camStream) camShot.disabled = false;
+    camStage.classList.remove('scanning');
   }
-});
+}
+
+camShot.addEventListener('click', runRecognition);
+/* ─── Тап по кадру камеры = кнопка «Распознать» ───
+   Защита: если распознавание уже идёт (кнопка disabled) или камера
+   ещё не готова — просто игнорируем. Также не срабатываем при тапе
+   по кнопкам внутри кадра (если они там когда-нибудь появятся). */
+if(camStage){
+  camStage.addEventListener('click', (e) => {
+    // не срабатываем, если тап пришёлся на элемент внутри кнопок/подсказок
+    if(e.target.closest('button')) return;
+    if(camShot.disabled) return;          // уже идёт распознавание
+    if(!camStream || camVideo.readyState < 2) return;  // видео не готово
+    runRecognition();
+  });
+
+  // Клавиатура: пробел/Enter на элементе (для десктопов)
+  camStage.addEventListener('keydown', (e) => {
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    if(camShot.disabled) return;
+    if(!camStream || camVideo.readyState < 2) return;
+    runRecognition();
+  });
+}
 
 /* ═══════════════ PWA: иконки, манифест, Service Worker ═══════════════ */
 /** Генерация PNG-иконки (окружность + точки + крестик центра) на canvas */

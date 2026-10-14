@@ -1564,6 +1564,76 @@ function drawSegmentsScene(res){
   const sc = worldToScreen(c.x, c.y);
   const sd = worldToScreen(d.x, d.y);
 
+  /* — продолжения прямых AB и CD (тонкие серые пунктиры) —
+     Рисуются ПОД отрезками, показывают, куда «уходит» каждая
+     прямая за пределы сегмента. Если точка пересечения известна
+     и лежит далеко — пунктир растягивается до неё + небольшой запас. */
+  (function drawExtensions(){
+    const cText2 = cssVar('--text2') || '#888888';
+    const baseLen = 70;   // базовая длина продолжения, px
+    const pad     = 25;   // запас за точкой пересечения, px
+
+    // Куда смотрит пересечение (в экранных координатах), если оно есть
+    const sp = res.intersection
+      ? worldToScreen(res.intersection.x, res.intersection.y)
+      : null;
+
+    // Единичное направление отрезка на экране
+    function segDir(p, q){
+      const dx = q.x - p.x, dy = q.y - p.y;
+      const len = Math.hypot(dx, dy);
+      if(len < 1e-6) return null;
+      return { ux: dx / len, uy: dy / len };
+    }
+
+    // Длина продолжения: если пересечение в этом направлении — растягиваем
+    function extLen(sx, sy, ux, uy){
+      if(!sp) return baseLen;
+      const proj = (sp.x - sx) * ux + (sp.y - sy) * uy;
+      return Math.max(baseLen, proj + pad);
+    }
+
+    const dAB = segDir(sa, sb);
+    const dCD = segDir(sc, sd);
+    if(!dAB || !dCD) return;
+
+    ctx.save();
+    ctx.setLineDash([4, 5]);     // пунктир 4-5
+    ctx.lineWidth   = 1;         // тонкая линия
+    ctx.strokeStyle = cText2;    // серый (адаптируется к теме)
+    ctx.globalAlpha = 0.55;
+
+    // Продолжение AB за точку A (в сторону, обратную B)
+    const lenA = extLen(sa.x, sa.y, -dAB.ux, -dAB.uy);
+    ctx.beginPath();
+    ctx.moveTo(sa.x, sa.y);
+    ctx.lineTo(sa.x - dAB.ux * lenA, sa.y - dAB.uy * lenA);
+    ctx.stroke();
+
+    // Продолжение AB за точку B (в сторону направления AB)
+    const lenB = extLen(sb.x, sb.y, dAB.ux, dAB.uy);
+    ctx.beginPath();
+    ctx.moveTo(sb.x, sb.y);
+    ctx.lineTo(sb.x + dAB.ux * lenB, sb.y + dAB.uy * lenB);
+    ctx.stroke();
+
+    // Продолжение CD за точку C
+    const lenC = extLen(sc.x, sc.y, -dCD.ux, -dCD.uy);
+    ctx.beginPath();
+    ctx.moveTo(sc.x, sc.y);
+    ctx.lineTo(sc.x - dCD.ux * lenC, sc.y - dCD.uy * lenC);
+    ctx.stroke();
+
+    // Продолжение CD за точку D
+    const lenD = extLen(sd.x, sd.y, dCD.ux, dCD.uy);
+    ctx.beginPath();
+    ctx.moveTo(sd.x, sd.y);
+    ctx.lineTo(sd.x + dCD.ux * lenD, sd.y + dCD.uy * lenD);
+    ctx.stroke();
+
+    ctx.restore();
+  })();
+
   /* — отрезок AB (акцентный синий) — */
   ctx.strokeStyle = cAccent;
   ctx.lineWidth = 2.5;

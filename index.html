@@ -555,6 +555,62 @@ function toast(msg, isError){
   toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
 }
 
+/* ═══════════════ ЧЕРНОВИК: теневой автосейв ввода ═══════════════
+   Всё, что пользователь печатает в полях и выбирает в переключателе,
+   тихо сохраняется в localStorage. Также сохраняется последний
+   рассчитанный результат — чтобы после перезапуска сразу отрисовать
+   окружность/угол. Черновик живёт 30 дней, потом удаляется.
+   Ключ: 'cc-draft'.
+   ───────────────────────────────────────────────────────────── */
+const DRAFT_KEY = 'cc-draft';
+const DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;  // 30 дней в миллисекундах
+
+/** Собрать текущее состояние (поля + режим + результат) → сохранить. */
+function saveDraft(){
+  try{
+    const draft = {
+      mode: state.mode,
+      points: $$('.point-card').map(card => ({
+        x: ($('.in-x', card) || {}).value || '',
+        y: ($('.in-y', card) || {}).value || ''
+      })),
+      // Результат и рассчитанные точки — для восстановления холста
+      result:     state.result ? JSON.parse(JSON.stringify(state.result)) : null,
+      calcPoints: state.points ? JSON.parse(JSON.stringify(state.points)) : null,
+      savedAt: Date.now()
+    };
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+  }catch(e){ /* приватный режим / квота — тихо игнорируем */ }
+}
+
+/** Прочитать черновик (или null). Старше 30 дней — удаляет и возвращает null. */
+function loadDraft(){
+  try{
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if(!raw) return null;
+    const d = JSON.parse(raw);
+    if(!d || typeof d !== 'object') return null;
+    // Проверка срока годности
+    if(d.savedAt && (Date.now() - d.savedAt) > DRAFT_TTL_MS){
+      try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+      return null;
+    }
+    return d;
+  }catch(e){ return null; }
+}
+
+/** Удалить черновик (для кнопки «Очистить»). */
+function clearDraft(){
+  try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+}
+
+/** Отложенный сейв — не чаще ~1 раза в 300 мс, чтобы не тормозить ввод. */
+let draftTimer = null;
+function scheduleDraftSave(){
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraft, 300);
+}
+
 /* ═══════════════ ТЕМЫ ═══════════════ */
 const THEMES = [
   {id:'light',    name:'Светлая',        swatch:'linear-gradient(135deg,#FFFFFF,#F2F2F7)',        meta:'#F2F2F7'},
@@ -666,6 +722,7 @@ if(modeSeg){
         b.setAttribute('aria-pressed', j === i ? 'true' : 'false');
       });
       updateVisiblePoints();
+      saveDraft();                  // <-- тихо сохраняем черновик
       if(state.result){ try{ calculate(true); }catch(e){ console.error(e); } }
       draw();
     });
@@ -785,6 +842,39 @@ function angleFromTwoPoints(a, b){
   const mirror = (360 - ang) % 360;     // зеркальный угол (350 для 10°)
   return { angle: ang, mirror: mirror, length: len, mode: 2 };
 }
+
+/** Угол между двумя отрезками AB и CD.
+ *  Возвращает:
+ *    angle      — угол между прямыми AB и CD (0…180°)
+ *    supplement — дополнительный угол (180° − angle)
+ *    angAB/angCD — направления отрезков относительно оси X (0…360°)
+ *    lenAB/lenCD — длины отрезков
+ *  Пример: если AB и CD почти параллельны — angle ≈ 0°, supplement ≈ 180°.
+ *  Если перпендикулярны — angle = supplement = 90°. */
+function angleBetweenSegments(a, b, c, d){
+  const v1x = b.x - a.x, v1y = b.y - a.y;   // вектор AB
+  const v2x = d.x - c.x, v2y = d.y - c.y;   // вектор CD
+  const lenAB = Math.hypot(v1x, v1y);
+  const lenCD = Math.hypot(v2x, v2y);
+  if(lenAB < 1e-12 || lenCD < 1e-12){
+    throw new Error('Один из отрезков вырожден — точки совпадают.');
+  }
+  const norm = (deg) => ((deg % 360) + 360) % 360;
+  const angAB = norm(Math.atan2(v1y, v1x) * 180 / Math.PI);
+  const angCD = norm(Math.atan2(v2y, v2x) * 180 / Math.PI);
+  let diff = norm(angCD - angAB);
+  const angle = diff > 180 ? 360 - diff : diff;   // приводим к 0…180
+  const supplement = 180 - angle;
+  return {
+    angle: angle,
+    supplement: supplement,
+    angAB: angAB,
+    angCD: angCD,
+    lenAB: lenAB,
+    lenCD: lenCD,
+    mode: 4
+  };
+}
 /* ═══════════════ СБОР ВВОДА И РАСЧЁТ ═══════════════ */
 function readPoints(){
   const cards = $$('.point-card').slice(0, state.mode);
@@ -813,7 +903,7 @@ function calculate(silent){
   try{
     if(state.mode === 2)        res = angleFromTwoPoints(pts[0], pts[1]);
     else if(state.mode === 3)   res = circumcenter3(pts[0], pts[1], pts[2]);
-    else                        res = fitCircleLS(pts);
+    else                        res = angleBetweenSegments(pts[0], pts[1], pts[2], pts[3]);
     res.mode = state.mode;
   }catch(e){
     if(!silent) toast(e.message || 'Ошибка расчёта.', true);
@@ -823,11 +913,12 @@ function calculate(silent){
   state.result = res;
   renderResult(res);
   fitView();
+  saveDraft();          // <-- сохраняем результат в черновик
   if(!silent){
     let msg = 'Готово ✓';
     if(state.mode === 2)      msg = 'Угол рассчитан ✓';
     else if(state.mode === 3) msg = 'Окружность построена ✓';
-    else                      msg = 'Аппроксимация выполнена ✓';
+    else                      msg = 'Угол между отрезками найден ✓';
     toast(msg);
   }
 }
@@ -856,18 +947,19 @@ function renderResult(res){
     $('#resEq').textContent =
       '(x ' + signTerm(res.cx) + ')² + (y ' + signTerm(res.cy) + ')² = ' + fmt(res.R) + '²';
   } else {
-    $('#resTitle').textContent = 'Аппроксимация окружности';
-    $('#resL1').textContent = 'X₀ (центр)';
-    $('#resV1').textContent = fmt(res.cx);
-    $('#resL2').textContent = 'Y₀ (центр)';
-    $('#resV2').textContent = fmt(res.cy);
-    $('#resL3').textContent = 'R (радиус)';
-    $('#resV3').textContent = fmt(res.R);
+    $('#resTitle').textContent = 'Угол между отрезками';
+    $('#resL1').textContent = 'Угол AB↔CD';
+    $('#resV1').textContent = fmt(res.angle) + '°';
+    $('#resL2').textContent = 'Дополнительный';
+    $('#resV2').textContent = fmt(res.supplement) + '°';
+    $('#resL3').textContent = 'Длина AB';
+    $('#resV3').textContent = fmt(res.lenAB);
     $('#resCell4').hidden = false;
-    $('#resL4').textContent = 'Невязка (RMSE)';
-    $('#resV4').textContent = fmt(res.rmse);
+    $('#resL4').textContent = 'Длина CD';
+    $('#resV4').textContent = fmt(res.lenCD);
     $('#resEq').textContent =
-      '(x ' + signTerm(res.cx) + ')² + (y ' + signTerm(res.cy) + ')² = ' + fmt(res.R) + '²';
+      'Угол между прямой AB и прямой CD: ' + fmt(res.angle) + '° ' +
+      '(доп. ' + fmt(res.supplement) + '°)';
   }
   $('#resultCard').hidden = false;
 }
@@ -875,7 +967,10 @@ function renderResult(res){
 $('#calcBtn').addEventListener('click', () => calculate(false));
 $$('#pointsWrap input').forEach(inp => {
   inp.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); calculate(false); } });
-  inp.addEventListener('input', () => inp.classList.remove('err'));
+  inp.addEventListener('input', () => {
+    inp.classList.remove('err');
+    scheduleDraftSave();          // <-- тихо сохраняем черновик
+  });
 });
 
 $('#clearBtn').addEventListener('click', () => {
@@ -884,10 +979,11 @@ $('#clearBtn').addEventListener('click', () => {
   state.result = null;
   $('#resultCard').hidden = true;
   view = { cx: 0, cy: 0, scale: 50 };
+  clearDraft();                 // <-- стираем сохранённый черновик
+  saveDraft();                  // <-- сразу пишем новый пустой
   draw();
   toast('Поля очищены');
 });
-
 
 /* ═══════════════ ХОЛСТ: отрисовка ═══════════════ */
 function cssVar(name){
@@ -1019,9 +1115,15 @@ function draw(){
 
   const res = state.result;
 
-  /* — режим «2 точки»: рисуем отрезок AB и метку угла — */
+  /* — режим «2 точки»: отрезок AB и метка угла — */
   if(res.mode === 2){
     drawAngleScene(res);
+    return;
+  }
+
+  /* — режим «4 точки»: два отрезка AB и CD + метка угла между ними — */
+  if(res.mode === 4){
+    drawSegmentsScene(res);
     return;
   }
 
@@ -1161,6 +1263,71 @@ function drawAngleScene(res){
   ctx.fillText(labelText, mx, my - 8);
 }
 
+function drawSegmentsScene(res){
+  if(state.points.length < 4) return;
+  const cBg     = cssVar('--canvas-bg')    || '#ffffff';
+  const cText   = cssVar('--text')         || '#000000';
+  const cAccent = cssVar('--accent')       || '#007AFF';
+  const cCenter = cssVar('--center-color') || '#FF3B30';
+  const cPoint  = cssVar('--point-color')  || '#FF9500';
+
+  const a = state.points[0], b = state.points[1];
+  const c = state.points[2], d = state.points[3];
+  const sa = worldToScreen(a.x, a.y);
+  const sb = worldToScreen(b.x, b.y);
+  const sc = worldToScreen(c.x, c.y);
+  const sd = worldToScreen(d.x, d.y);
+
+  /* — отрезок AB (акцентный синий) — */
+  ctx.strokeStyle = cAccent;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(sa.x, sa.y);
+  ctx.lineTo(sb.x, sb.y);
+  ctx.stroke();
+
+  /* — отрезок CD (красный — цвет центра, чтобы визуально отличать) — */
+  ctx.strokeStyle = cCenter;
+  ctx.beginPath();
+  ctx.moveTo(sc.x, sc.y);
+  ctx.lineTo(sd.x, sd.y);
+  ctx.stroke();
+
+  /* — точки A, B, C, D с подписями — */
+  ctx.font = '700 13px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+  for(const p of state.points){
+    const s = worldToScreen(p.x, p.y);
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, 6.5, 0, Math.PI*2);
+    ctx.fillStyle = cPoint;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = cBg;
+    ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = cBg;
+    ctx.strokeText(p.label, s.x + 9, s.y - 6);
+    ctx.fillStyle = cText;
+    ctx.fillText(p.label, s.x + 9, s.y - 6);
+  }
+
+  /* — метка угла по центру между серединами AB и CD — */
+  const mxAB = (sa.x + sb.x) / 2, myAB = (sa.y + sb.y) / 2;
+  const mxCD = (sc.x + sd.x) / 2, myCD = (sc.y + sd.y) / 2;
+  const labelX = (mxAB + mxCD) / 2;
+  const labelY = (myAB + myCD) / 2;
+  const labelText = fmt(res.angle) + '° / ' + fmt(res.supplement) + '°';
+  ctx.font = '600 13px -apple-system,BlinkMacSystemFont,"SF Pro Text",sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = cBg;
+  ctx.strokeText(labelText, labelX, labelY);
+  ctx.fillStyle = cText;
+  ctx.fillText(labelText, labelX, labelY);
+}
 /* ═══════════════ ЖЕСТЫ: pan / pinch / wheel ═══════════════ */
 function zoomAt(sx, sy, factor){
   const w = screenToWorld(sx, sy);
@@ -1555,15 +1722,66 @@ function buildIconDataURL(size){
 
 /* ═══════════════ СТАРТ (в самом конце, когда всё объявлено) ═══════════════ */
 (function startup(){
+  /* --- тема оформления --- */
   let saved = 'auto';
   try{ saved = localStorage.getItem('cc-theme') || 'auto'; }catch(e){}
   if(!THEMES.some(t => t.id === saved)) saved = 'auto';
   applyTheme(saved);
   buildThemeList();
+
+  /* --- восстановление черновика --- */
+  const draft = loadDraft();
+  let restored = false;
+
+  if(draft){
+    // 1) Координаты во всех полях
+    const cards = $$('.point-card');
+    cards.forEach((card, i) => {
+      const p = (draft.points && draft.points[i]) || {};
+      const ix = $('.in-x', card), iy = $('.in-y', card);
+      if(ix && typeof p.x === 'string' && p.x){ ix.value = p.x; restored = true; }
+      if(iy && typeof p.y === 'string' && p.y){ iy.value = p.y; restored = true; }
+    });
+
+    // 2) Выбранный режим (2/3/4 точки)
+    if(draft.mode && draft.mode !== state.mode){
+      const btn = $$('#modeSeg button').find(b => parseInt(b.dataset.mode, 10) === draft.mode);
+      if(btn){ btn.click(); restored = true; }
+    }
+
+    // 3) Последний результат и точки — чтобы холст сразу нарисовал окружность/угол
+    if(draft.result && draft.calcPoints && Array.isArray(draft.calcPoints)){
+      state.points = draft.calcPoints;
+      state.result = draft.result;
+      try{ renderResult(draft.result); restored = true; }catch(e){ /* ignore */ }
+    }
+  }
+
   updateVisiblePoints();
-  draw();
+
+  // Рисуем: если есть результат — автомасштабируем, иначе показываем пустую сетку
+  if(state.result){
+    try{ fitView(); }catch(e){ draw(); }
+  } else {
+    draw();
+  }
+
+  // Тихое подтверждение восстановления — ненавязчивый тост
+  if(restored){
+    setTimeout(() => { try{ toast('Восстановлен последний ввод ✓'); }catch(e){} }, 600);
+  }
+
   window.addEventListener('load', () => setTimeout(() => { try{ draw(); }catch(e){} }, 60));
 })();
+/* ═══════════════ ФИНАЛЬНЫЙ АВТОСЕЙВ ═══════════════
+   Надёжно сохраняем черновик, когда страница уходит в фон
+   или закрывается — до того, как браузер её выгрузит.
+   ─────────────────────────────────────────────────── */
+window.addEventListener('pagehide', () => { try{ saveDraft(); }catch(e){} });
+window.addEventListener('beforeunload', () => { try{ saveDraft(); }catch(e){} });
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'hidden'){ try{ saveDraft(); }catch(e){} }
+});
 </script>
 </body>
 </html>
